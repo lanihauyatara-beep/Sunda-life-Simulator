@@ -15,6 +15,9 @@ import {
   WeatherCondition,
   WeatherForecastDay,
   FinancialTransaction,
+  DailyMissionTask,
+  DailyMissionTaskId,
+  DailyMissionsState,
 } from '../types/game';
 
 export const ASSETS = {
@@ -181,6 +184,125 @@ export function appendTransaction(
     id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
   };
   return [nextItem, ...(existing ?? [])].slice(0, 10);
+}
+
+const DAILY_MISSION_TEMPLATES: Record<
+  DailyMissionTaskId,
+  Omit<DailyMissionTask, 'progress' | 'claimed'>
+> = {
+  greet_warga: {
+    id: 'greet_warga',
+    label: 'Sapa 5 warga kampung',
+    target: 5,
+    rewardPoints: 15,
+    rewardMoney: 10000,
+  },
+  sell_items: {
+    id: 'sell_items',
+    label: 'Jual 5 item di Warung Arga',
+    target: 5,
+    rewardPoints: 20,
+    rewardMoney: 15000,
+  },
+  forage_herbal: {
+    id: 'forage_herbal',
+    label: 'Kumpulkan 1 rempah hutan',
+    target: 1,
+    rewardPoints: 18,
+    rewardMoney: 12000,
+  },
+  catch_fish: {
+    id: 'catch_fish',
+    label: 'Tangkap 2 ikan di sungai',
+    target: 2,
+    rewardPoints: 16,
+    rewardMoney: 12000,
+  },
+  side_job: {
+    id: 'side_job',
+    label: 'Selesaikan 1 kerja sampingan',
+    target: 1,
+    rewardPoints: 18,
+    rewardMoney: 15000,
+  },
+  pray_jamaah: {
+    id: 'pray_jamaah',
+    label: 'Tunaikan 3 waktu sholat',
+    target: 3,
+    rewardPoints: 18,
+    rewardMoney: 10000,
+  },
+};
+
+export const DAILY_MISSION_GRAND_BONUS = {
+  points: 25,
+  money: 25000,
+};
+
+export function generateDailyMissions(day: number): DailyMissionsState {
+  // Day 1 & even rotation always feature the core trio; other days rotate cleanly with 3 varied tasks
+  const pools: DailyMissionTaskId[][] = [
+    ['greet_warga', 'sell_items', 'forage_herbal'],
+    ['greet_warga', 'sell_items', 'catch_fish'],
+    ['greet_warga', 'forage_herbal', 'side_job'],
+    ['sell_items', 'forage_herbal', 'pray_jamaah'],
+  ];
+  const chosenIds = pools[(Math.max(1, day) - 1) % pools.length];
+  return {
+    day,
+    bonusClaimed: false,
+    tasks: chosenIds.map((id) => ({
+      ...DAILY_MISSION_TEMPLATES[id],
+      progress: 0,
+      claimed: false,
+    })),
+  };
+}
+
+export function ensureDailyMissions(
+  day: number,
+  existing?: DailyMissionsState,
+  greetedCount = 0,
+  prayedCount = 0
+): DailyMissionsState {
+  const base = existing && existing.day === day ? existing : generateDailyMissions(day);
+  return {
+    ...base,
+    tasks: base.tasks.map((task) => {
+      if (task.id === 'greet_warga') {
+        return {
+          ...task,
+          progress: Math.min(task.target, Math.max(task.progress, greetedCount)),
+        };
+      }
+      if (task.id === 'pray_jamaah') {
+        return {
+          ...task,
+          progress: Math.min(task.target, Math.max(task.progress, prayedCount)),
+        };
+      }
+      return task;
+    }),
+  };
+}
+
+export function advanceDailyMissionProgress(
+  missions: DailyMissionsState | undefined,
+  day: number,
+  taskId: DailyMissionTaskId,
+  delta: number,
+  greetedCount = 0,
+  prayedCount = 0
+): DailyMissionsState {
+  const base = ensureDailyMissions(day, missions, greetedCount, prayedCount);
+  return {
+    ...base,
+    tasks: base.tasks.map((task) =>
+      task.id === taskId
+        ? { ...task, progress: Math.min(task.target, task.progress + delta) }
+        : task
+    ),
+  };
 }
 
 export function formatGameTime(minutesOfDay: number): string {
@@ -2542,6 +2664,7 @@ export function createInitialGameState(slotId = 1): GameState {
     weatherRemainingMin: initialWeather.weatherRemainingMin,
     weatherForecast: ensureWeatherForecast(1, initialWeather.season, initialWeather.weather),
     transactions: [],
+    dailyMissions: ensureDailyMissions(1, undefined, 0, 1),
     lastSavedAt: new Date().toISOString(),
   };
 }

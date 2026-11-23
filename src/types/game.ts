@@ -275,10 +275,35 @@ export interface FinancialTransaction {
     | 'konsumsi'
     | 'tradisi'
     | 'hutang'
-    | 'kesehatan';
+    | 'kesehatan'
+    | 'misi';
   title: string;
   detail?: string;
   amount: number;
+}
+
+export type DailyMissionTaskId =
+  | 'greet_warga'
+  | 'sell_items'
+  | 'forage_herbal'
+  | 'catch_fish'
+  | 'side_job'
+  | 'pray_jamaah';
+
+export interface DailyMissionTask {
+  id: DailyMissionTaskId;
+  label: string;
+  target: number;
+  progress: number;
+  rewardPoints: number;
+  rewardMoney: number;
+  claimed: boolean;
+}
+
+export interface DailyMissionsState {
+  day: number;
+  tasks: DailyMissionTask[];
+  bonusClaimed: boolean;
 }
 
 export interface ReviewEntry {
@@ -333,6 +358,7 @@ export interface GameState {
   weatherRemainingMin: number;
   weatherForecast?: WeatherForecastDay[];
   transactions?: FinancialTransaction[];
+  dailyMissions?: DailyMissionsState;
   lastSavedAt: string;
 }
 

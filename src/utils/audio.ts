@@ -30,6 +30,17 @@ class SoundEngine {
   private sceneFilter: BiquadFilterNode | null = null;
   private sceneGain: GainNode | null = null;
 
+  // Dedicated Pasar Tradisional crowd chatter layer (riuh pedagang)
+  private pasarChatterSource: AudioBufferSourceNode | null = null;
+  private pasarChatterFilter: BiquadFilterNode | null = null;
+  private pasarChatterGain: GainNode | null = null;
+  private pasarLfo: OscillatorNode | null = null;
+  private pasarLfoGain: GainNode | null = null;
+  private pasarActive = false;
+  private pasarProximity = 1;
+  private pasarMinutesOfDay = 540;
+  private pasarTickerId: number | null = null;
+
   private ambientTickerId: number | null = null;
   private lastEnvState: EnvironmentAudioState | null = null;
   private isAudioUnlocked = false;
@@ -144,6 +155,37 @@ class SoundEngine {
     this.sceneFilter = sFilter;
     this.sceneGain = sGain;
 
+    // 3. Dedicated Pasar Crowd Murmur Channel (higher formant chatter with gentle organic ebb/flow LFO)
+    const pSrc = ctx.createBufferSource();
+    pSrc.buffer = noise;
+    pSrc.loop = true;
+    const pFilter = ctx.createBiquadFilter();
+    pFilter.type = 'bandpass';
+    pFilter.frequency.setValueAtTime(860, now);
+    pFilter.Q.setValueAtTime(1.15, now);
+    const pGain = ctx.createGain();
+    pGain.gain.setValueAtTime(0, now);
+
+    const pLfo = ctx.createOscillator();
+    pLfo.type = 'sine';
+    pLfo.frequency.setValueAtTime(0.28, now);
+    const pLfoGain = ctx.createGain();
+    pLfoGain.gain.setValueAtTime(0, now);
+
+    pLfo.connect(pLfoGain);
+    pLfoGain.connect(pGain.gain);
+    pSrc.connect(pFilter);
+    pFilter.connect(pGain);
+    pGain.connect(master);
+    pSrc.start(now, 0.75);
+    pLfo.start(now);
+
+    this.pasarChatterSource = pSrc;
+    this.pasarChatterFilter = pFilter;
+    this.pasarChatterGain = pGain;
+    this.pasarLfo = pLfo;
+    this.pasarLfoGain = pLfoGain;
+
     return true;
   }
 
@@ -247,7 +289,10 @@ class SoundEngine {
       this.ambientMasterGain?.gain.setTargetAtTime(0, now, 0.25);
       this.rainGain?.gain.setTargetAtTime(0, now, 0.25);
       this.sceneGain?.gain.setTargetAtTime(0, now, 0.25);
+      this.pasarChatterGain?.gain.setTargetAtTime(0, now, 0.25);
+      this.pasarLfoGain?.gain.setTargetAtTime(0, now, 0.25);
       this.stopAmbientTicker();
+      this.stopPasarTicker();
       return;
     }
 
@@ -311,21 +356,8 @@ class SoundEngine {
       const hour = env.minutesOfDay / 60;
       const isNight = hour >= 18.5 || hour < 5.0;
 
-      // Marketplace subtle contextual accents (wood basket taps, distant vendor chime/murmur)
-      if (env.sceneId === 'pasar') {
-        const r = Math.random();
-        if (r < 0.45) {
-          // Soft wooden basket / crate tap in market bustle
-          this.playFilteredNoiseBurst(0.09, 'bandpass', 950, 620, 2.6, 0.035, 0, true);
-        } else if (r < 0.72) {
-          // Subtle distant vendor brass bell / scale clink
-          this.playTone(980 + Math.random() * 160, 0.14, 'sine', 0.016, 0, true);
-        } else if (r < 0.9) {
-          // Gentle chatter swell
-          this.playFilteredNoiseBurst(0.45, 'bandpass', 420, 620, 2.1, 0.025, 0, true);
-        }
-        return;
-      }
+      // Pasar accents are handled by the dedicated setPasarAmbience / ensurePasarTicker engine
+      if (env.sceneId === 'pasar') return;
 
       // River & forest subtle bird chirps / night crickets
       if (!env.isIndoor && env.weather !== 'hujan') {
@@ -355,6 +387,136 @@ class SoundEngine {
     if (this.ambientTickerId !== null && typeof window !== 'undefined') {
       window.clearInterval(this.ambientTickerId);
       this.ambientTickerId = null;
+    }
+  }
+
+  private playVocalFormantSyllable(
+    pitchStart: number,
+    pitchEnd: number,
+    formantFreq: number,
+    duration: number,
+    gainPeak: number,
+    delay = 0
+  ) {
+    if (this.ambientVolume <= 0.01) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(pitchStart, now);
+    osc.frequency.linearRampToValueAtTime(pitchEnd, now + duration);
+
+    const formant = ctx.createBiquadFilter();
+    formant.type = 'bandpass';
+    formant.frequency.setValueAtTime(formantFreq, now);
+    formant.Q.setValueAtTime(4.2, now);
+
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.setValueAtTime(1650, now);
+
+    const gain = ctx.createGain();
+    const vol = Math.max(0.0005, gainPeak * this.ambientVolume * this.pasarProximity);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(vol, now + Math.min(0.04, duration * 0.3));
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    osc.connect(formant);
+    formant.connect(lowpass);
+    lowpass.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
+  }
+
+  /**
+   * Simulates soft background tawar-menawar (buyer inquiry + seller warm reply) in Pasar Sunda
+   */
+  public playPasarBargain() {
+    if (!this.isAudioUnlocked || this.ambientVolume <= 0.01) return;
+    // Buyer rising inflection ("Sabaraha, Mang?")
+    const bPitch = 195 + Math.random() * 35;
+    this.playVocalFormantSyllable(bPitch, bPitch * 1.08, 720, 0.14, 0.022, 0);
+    this.playVocalFormantSyllable(bPitch * 1.05, bPitch * 1.24, 880, 0.17, 0.024, 0.17);
+
+    // Seller calm descending response ("Mangga, mirah...")
+    const sPitch = 135 + Math.random() * 25;
+    this.playVocalFormantSyllable(sPitch * 1.06, sPitch * 0.96, 620, 0.16, 0.024, 0.48);
+    this.playVocalFormantSyllable(sPitch, sPitch * 0.88, 560, 0.22, 0.022, 0.67);
+  }
+
+  /**
+   * Simulates distant vendor friendly call & market commotion bursts (riuh pedagang)
+   */
+  private playPasarVendorCall() {
+    if (!this.isAudioUnlocked || this.ambientVolume <= 0.01) return;
+    const base = 165 + Math.random() * 55;
+    this.playVocalFormantSyllable(base, base * 1.12, 780, 0.15, 0.02, 0);
+    this.playVocalFormantSyllable(base * 1.15, base * 0.92, 690, 0.24, 0.022, 0.18);
+  }
+
+  public setPasarAmbience(enabled: boolean, minutesOfDay = 540, stallProximity = 1) {
+    this.pasarActive = enabled;
+    this.pasarMinutesOfDay = minutesOfDay;
+    this.pasarProximity = Math.max(0.55, Math.min(1.25, stallProximity));
+
+    if (!this.ensureAmbientGraph() || !this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    if (!enabled) {
+      this.pasarChatterGain?.gain.setTargetAtTime(0, now, 0.35);
+      this.pasarLfoGain?.gain.setTargetAtTime(0, now, 0.35);
+      this.stopPasarTicker();
+      return;
+    }
+
+    const hour = (minutesOfDay / 60) % 24;
+    const busyFactor = hour >= 6 && hour <= 17 ? 1 : 0.45;
+    const baseChatter = 0.036 * busyFactor * this.pasarProximity;
+    this.pasarChatterFilter?.frequency.setTargetAtTime(
+      840 + (this.pasarProximity - 0.6) * 220,
+      now,
+      0.4
+    );
+    this.pasarChatterGain?.gain.setTargetAtTime(baseChatter, now, 0.45);
+    this.pasarLfoGain?.gain.setTargetAtTime(baseChatter * 0.28, now, 0.45);
+
+    this.ensurePasarTicker();
+  }
+
+  private ensurePasarTicker() {
+    if (typeof window === 'undefined' || this.pasarTickerId !== null) return;
+    this.pasarTickerId = window.setInterval(() => {
+      if (!this.pasarActive || !this.isAudioUnlocked || this.ambientVolume <= 0.01) return;
+      const hour = (this.pasarMinutesOfDay / 60) % 24;
+      const busyChance = hour >= 6 && hour <= 17 ? 1 : 0.45;
+      const roll = Math.random();
+
+      if (roll < 0.36 * busyChance) {
+        // Tawar-menawar antar pembeli dan pedagang
+        this.playPasarBargain();
+      } else if (roll < 0.62 * busyChance) {
+        // Teriakan / panggilan ramah pedagang lapak pasar
+        this.playPasarVendorCall();
+      } else if (roll < 0.82) {
+        // Suara keranjang bambu / peti kayu & riuh obrolan
+        this.playFilteredNoiseBurst(0.11, 'bandpass', 960, 620, 2.4, 0.038 * this.pasarProximity, 0, true);
+        this.playFilteredNoiseBurst(0.5, 'bandpass', 480, 680, 1.9, 0.028 * this.pasarProximity, 0.08, true);
+      } else {
+        // Denting timbangan / koin belanja pedagang
+        this.playTone(1040 + Math.random() * 140, 0.12, 'sine', 0.018 * this.pasarProximity, 0, true);
+        this.playTone(1380 + Math.random() * 120, 0.14, 'sine', 0.014 * this.pasarProximity, 0.07, true);
+      }
+    }, 2100);
+  }
+
+  private stopPasarTicker() {
+    if (this.pasarTickerId !== null && typeof window !== 'undefined') {
+      window.clearInterval(this.pasarTickerId);
+      this.pasarTickerId = null;
     }
   }
 

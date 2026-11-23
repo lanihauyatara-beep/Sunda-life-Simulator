@@ -13,9 +13,12 @@ import {
   MoonStar,
   Save,
   FolderOpen,
+  CheckCircle2,
+  Gift,
 } from 'lucide-react';
 import {
   ASSETS,
+  DAILY_MISSION_GRAND_BONUS,
   DEFAULT_SETTINGS,
   ITEMS,
   ITEM_MAP,
@@ -27,9 +30,11 @@ import {
   TRADITIONS,
   VEHICLE_INFO,
   WEATHER_META,
+  advanceDailyMissionProgress,
   appendTransaction,
   computeEffectiveActivityPoints,
   createInitialGameState,
+  ensureDailyMissions,
   ensureWeatherForecast,
   formatGameDate,
   formatGameTime,
@@ -41,6 +46,7 @@ import {
 import {
   ActiveModal,
   CustomerOrder,
+  DailyMissionTaskId,
   DialogueOption,
   GameScreen,
   GameSettings,
@@ -136,6 +142,12 @@ function readAllSaveSlots(): SaveSlotSummary[] {
           transactions: Array.isArray(rawParsed.transactions)
             ? rawParsed.transactions.slice(0, 10)
             : [],
+          dailyMissions: ensureDailyMissions(
+            rawParsed.day ?? 1,
+            rawParsed.dailyMissions,
+            rawParsed.greetedNpcsToday?.length ?? 0,
+            rawParsed.prayedToday?.length ?? 0
+          ),
         };
         list.push({
           slotId: i,
@@ -177,6 +189,12 @@ function advanceClockState(
   let nextWeather = prev.weather ?? 'cerah';
   let nextWeatherRemaining = (prev.weatherRemainingMin ?? 90) - deltaMinutes;
   let nextForecast = ensureWeatherForecast(prev.day, nextSeason, nextWeather, prev.weatherForecast);
+  let nextMissions = ensureDailyMissions(
+    prev.day,
+    prev.dailyMissions,
+    prev.greetedNpcsToday.length,
+    prev.prayedToday.length
+  );
   let weatherToast: string | null = null;
 
   if (daysPassed > 0) {
@@ -186,6 +204,7 @@ function advanceClockState(
     nextJobs = [];
     nextGreeted = [];
     nextFruitPicked = false;
+    nextMissions = ensureDailyMissions(nextDay, undefined, 0, 0);
     if (nextInjuryDays > 0) {
       nextInjuryDays = Math.max(0, nextInjuryDays - daysPassed);
       if (nextInjuryDays <= 0) nextInjured = false;
@@ -247,6 +266,7 @@ function advanceClockState(
       weather: nextWeather,
       weatherRemainingMin: nextWeatherRemaining,
       weatherForecast: nextForecast,
+      dailyMissions: nextMissions,
     },
     autoClosedToast,
     weatherToast,
@@ -577,15 +597,22 @@ export default function App() {
           [...PRAYER_SCHEDULE].reverse().find((p) => gameState.minutesOfDay >= p.minutes) ?? PRAYER_SCHEDULE[0];
         setGameState((prev) => {
           const { next } = advanceClockState(prev, 12);
+          const nextPrayed = next.prayedToday.includes(curPrayer.name)
+            ? next.prayedToday
+            : [...next.prayedToday, curPrayer.name];
           return {
             ...next,
             energy: Math.min(100, next.energy + 10),
             reputation: Math.min(5, Number((next.reputation + 0.04).toFixed(2))),
-            prayedToday: next.prayedToday.includes(curPrayer.name)
-              ? next.prayedToday
-              : [...next.prayedToday, curPrayer.name],
+            prayedToday: nextPrayed,
             activityPoints: computeEffectiveActivityPoints(prev) + 10,
             totalPrayersCount: (next.totalPrayersCount ?? 0) + 1,
+            dailyMissions: ensureDailyMissions(
+              next.day,
+              next.dailyMissions,
+              next.greetedNpcsToday.length,
+              nextPrayed.length
+            ),
           };
         });
         showToast(`Alhamdulillah, Arga sholat ${curPrayer.name} di Masjid Al-Ikhlas (+10 Poin Keaktifan).`);
@@ -609,6 +636,14 @@ export default function App() {
               ...next.inventory,
               herbal_hutan: (next.inventory.herbal_hutan ?? 0) + 1,
             },
+            dailyMissions: advanceDailyMissionProgress(
+              next.dailyMissions,
+              next.day,
+              'forage_herbal',
+              1,
+              next.greetedNpcsToday.length,
+              next.prayedToday.length
+            ),
           };
         });
         showToast('Arga menemukan Rempah & Madu Hutan dari pinggiran Hutan Tutupan! (+5 Poin)');
@@ -656,6 +691,12 @@ export default function App() {
         greetedNpcsToday: greeted,
         activityPoints: computeEffectiveActivityPoints(prev) + ptsGain,
         totalGreetingsCount: (next.totalGreetingsCount ?? 0) + 1,
+        dailyMissions: ensureDailyMissions(
+          next.day,
+          next.dailyMissions,
+          greeted.length,
+          next.prayedToday.length
+        ),
       };
     });
   };
@@ -779,6 +820,14 @@ export default function App() {
             detail: `${itemTotal} barang terjual`,
             amount: earned,
           }),
+          dailyMissions: advanceDailyMissionProgress(
+            next.dailyMissions,
+            next.day,
+            'sell_items',
+            itemTotal,
+            next.greetedNpcsToday.length,
+            next.prayedToday.length
+          ),
         };
       });
 
@@ -876,6 +925,7 @@ export default function App() {
         weather: morningWeather.weather,
         weatherRemainingMin: morningWeather.durationMin,
         weatherForecast: updatedForecast,
+        dailyMissions: ensureDailyMissions(nextDay, undefined, 0, 0),
         activityPoints: computeEffectiveActivityPoints(prev) + 12,
       };
       setGameState(nextState);
@@ -1028,11 +1078,106 @@ export default function App() {
           detail: job.locationLabel,
           amount: job.reward,
         }),
+        dailyMissions: advanceDailyMissionProgress(
+          next.dailyMissions,
+          next.day,
+          'side_job',
+          1,
+          next.greetedNpcsToday.length,
+          next.prayedToday.length
+        ),
       };
     });
     setActiveModal(null);
     setActiveSideJob(null);
     showToast(`Kerja selesai! Arga mendapat upah ${formatRupiah(job.reward)} (+18 Poin Keaktifan).`);
+  };
+
+  const handleClaimDailyMission = (taskId: DailyMissionTaskId) => {
+    const missions = ensureDailyMissions(
+      gameState.day,
+      gameState.dailyMissions,
+      gameState.greetedNpcsToday.length,
+      gameState.prayedToday.length
+    );
+    const task = missions.tasks.find((t) => t.id === taskId);
+    if (!task || task.claimed || task.progress < task.target) return;
+
+    soundEngine.angklungSuccess();
+    setGameState((prev) => {
+      const synced = ensureDailyMissions(
+        prev.day,
+        prev.dailyMissions,
+        prev.greetedNpcsToday.length,
+        prev.prayedToday.length
+      );
+      return {
+        ...prev,
+        money: prev.money + task.rewardMoney,
+        activityPoints: computeEffectiveActivityPoints(prev) + task.rewardPoints,
+        dailyMissions: {
+          ...synced,
+          tasks: synced.tasks.map((t) => (t.id === taskId ? { ...t, claimed: true } : t)),
+        },
+        transactions: appendTransaction(prev.transactions, {
+          day: prev.day,
+          minutesOfDay: prev.minutesOfDay,
+          type: 'income',
+          category: 'misi',
+          title: `Misi Harian: ${task.label}`,
+          detail: `Hadiah +${task.rewardPoints} Poin Keaktifan`,
+          amount: task.rewardMoney,
+        }),
+      };
+    });
+    showToast(
+      `Misi Harian selesai! +${task.rewardPoints} Poin & ${formatRupiah(task.rewardMoney)}.`
+    );
+  };
+
+  const handleClaimDailyBonus = () => {
+    const missions = ensureDailyMissions(
+      gameState.day,
+      gameState.dailyMissions,
+      gameState.greetedNpcsToday.length,
+      gameState.prayedToday.length
+    );
+    const allDone = missions.tasks.every((t) => t.progress >= t.target);
+    if (!allDone || missions.bonusClaimed) return;
+
+    soundEngine.angklungSuccess();
+    setGameState((prev) => {
+      const synced = ensureDailyMissions(
+        prev.day,
+        prev.dailyMissions,
+        prev.greetedNpcsToday.length,
+        prev.prayedToday.length
+      );
+      return {
+        ...prev,
+        money: prev.money + DAILY_MISSION_GRAND_BONUS.money,
+        activityPoints:
+          computeEffectiveActivityPoints(prev) + DAILY_MISSION_GRAND_BONUS.points,
+        dailyMissions: {
+          ...synced,
+          bonusClaimed: true,
+        },
+        transactions: appendTransaction(prev.transactions, {
+          day: prev.day,
+          minutesOfDay: prev.minutesOfDay,
+          type: 'income',
+          category: 'misi',
+          title: 'Bonus Misi Harian (3/3 Selesai)',
+          detail: `+${DAILY_MISSION_GRAND_BONUS.points} Poin Keaktifan`,
+          amount: DAILY_MISSION_GRAND_BONUS.money,
+        }),
+      };
+    });
+    showToast(
+      `Luar biasa! Bonus 3/3 Misi Harian: +${DAILY_MISSION_GRAND_BONUS.points} Poin & ${formatRupiah(
+        DAILY_MISSION_GRAND_BONUS.money
+      )}!`
+    );
   };
 
   // Available Side Jobs based on current time (before 09:00 and after 17:00)
@@ -1282,14 +1427,21 @@ export default function App() {
               [...PRAYER_SCHEDULE].reverse().find((p) => gameState.minutesOfDay >= p.minutes) ?? PRAYER_SCHEDULE[0];
             setGameState((prev) => {
               const { next } = advanceClockState(prev, 10);
+              const nextPrayed = next.prayedToday.includes(curPrayer.name)
+                ? next.prayedToday
+                : [...next.prayedToday, curPrayer.name];
               return {
                 ...next,
                 energy: Math.min(100, next.energy + 8),
-                prayedToday: next.prayedToday.includes(curPrayer.name)
-                  ? next.prayedToday
-                  : [...next.prayedToday, curPrayer.name],
+                prayedToday: nextPrayed,
                 activityPoints: computeEffectiveActivityPoints(prev) + 8,
                 totalPrayersCount: (next.totalPrayersCount ?? 0) + 1,
+                dailyMissions: ensureDailyMissions(
+                  next.day,
+                  next.dailyMissions,
+                  next.greetedNpcsToday.length,
+                  nextPrayed.length
+                ),
               };
             });
             showToast(`Arga menunaikan sholat ${curPrayer.name} di sajadah kamar (+8% Energi, +8 Poin).`);
@@ -1467,48 +1619,147 @@ export default function App() {
       </header>
       )}
 
-      {/* LEFT FLOATING PANEL: AGENDA & MISI KAMPUNG */}
-      {activeModal === null && gameState.scene !== 'warung_interior' && gameState.scene !== 'warung_asih' && (
-        <aside className="absolute top-14 sm:top-20 [@media(max-height:520px)]:top-12 left-2 sm:left-3 z-20 w-48 sm:w-60 lg:w-64 bg-slate-950/85 backdrop-blur-md border border-amber-400/45 rounded-xl shadow-2xl overflow-hidden">
-          <button
-            onClick={() => setMissionOpen((v) => !v)}
-            className="w-full px-3 py-1.5 sm:py-2 flex items-center justify-between bg-slate-900/80 text-[11px] sm:text-xs font-bold text-amber-300 border-b border-slate-800"
-          >
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> AGENDA ARGA
-            </span>
-            {missionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-          {missionOpen && (
-            <div className="p-2.5 sm:p-3 text-[11px] sm:text-xs text-slate-200 space-y-1.5 sm:space-y-2 max-h-40 sm:max-h-60 overflow-y-auto">
-              <div>
-                <span className="font-bold text-amber-200">Warung Arga (09.00–17.00):</span>{' '}
-                {currentHour >= 9 && currentHour < 17 ? (
-                  <span className="text-emerald-300 font-semibold">Jam Buka! Masuk &amp; layani pembeli.</span>
-                ) : (
-                  <span className="text-slate-300">Tutup. Ambil kerja sampingan / ke Pasar / Warung Asih.</span>
+      {/* LEFT FLOATING PANEL: AGENDA & MISI HARIAN ARGA */}
+      {activeModal === null && gameState.scene !== 'warung_interior' && gameState.scene !== 'warung_asih' && (() => {
+        const dailyMissions = ensureDailyMissions(
+          gameState.day,
+          gameState.dailyMissions,
+          gameState.greetedNpcsToday.length,
+          gameState.prayedToday.length
+        );
+        const completedMissionsCount = dailyMissions.tasks.filter(
+          (t) => t.progress >= t.target
+        ).length;
+        const allMissionsDone = completedMissionsCount === dailyMissions.tasks.length;
+
+        return (
+          <aside className="absolute top-14 sm:top-20 [@media(max-height:520px)]:top-12 left-2 sm:left-3 z-20 w-52 sm:w-64 lg:w-72 bg-slate-950/88 backdrop-blur-md border border-amber-400/45 rounded-xl shadow-2xl overflow-hidden">
+            <button
+              onClick={() => setMissionOpen((v) => !v)}
+              className="w-full px-3 py-1.5 sm:py-2 flex items-center justify-between bg-slate-900/80 text-[11px] sm:text-xs font-bold text-amber-300 border-b border-slate-800"
+            >
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>AGENDA ARGA</span>
+                <span className="px-1.5 py-0.5 rounded bg-amber-400/15 border border-amber-400/40 text-[9px] font-mono-num text-amber-200">
+                  Misi {completedMissionsCount}/3
+                </span>
+              </span>
+              {missionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {missionOpen && (
+              <div className="p-2.5 sm:p-3 text-[11px] sm:text-xs text-slate-200 space-y-2 max-h-48 sm:max-h-72 overflow-y-auto">
+                <div>
+                  <span className="font-bold text-amber-200">Warung Arga (09.00–17.00):</span>{' '}
+                  {currentHour >= 9 && currentHour < 17 ? (
+                    <span className="text-emerald-300 font-semibold">Jam Buka! Masuk &amp; layani pembeli.</span>
+                  ) : (
+                    <span className="text-slate-300">Tutup. Ambil kerja sampingan / ke Pasar / Warung Asih.</span>
+                  )}
+                </div>
+                {isSleepReminder && (
+                  <div className="p-2 rounded-lg bg-indigo-950/80 border border-indigo-400/60 text-indigo-200 flex items-start gap-1.5">
+                    <MoonStar className="w-4 h-4 shrink-0 text-indigo-300 mt-0.5" />
+                    <span>Waktu istirahat (21.00–04.30). Pulang ke kamar untuk tidur!</span>
+                  </div>
                 )}
-              </div>
-              {isSleepReminder && (
-                <div className="p-2 rounded-lg bg-indigo-950/80 border border-indigo-400/60 text-indigo-200 flex items-start gap-1.5">
-                  <MoonStar className="w-4 h-4 shrink-0 text-indigo-300 mt-0.5" />
-                  <span>Waktu istirahat (21.00–04.30). Pulang ke kamar untuk tidur!</span>
+                {gameState.isInjured && (
+                  <div className="p-2 rounded-lg bg-rose-950/80 border border-rose-400/60 text-rose-200 flex items-start gap-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-300 mt-0.5" />
+                    <span>Kaki Arga masih pemulihan. Hati-hati menyeberang jalan!</span>
+                  </div>
+                )}
+
+                {/* Misi Harian (3 Tugas Kecil) */}
+                <div className="pt-1.5 border-t border-slate-800 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                    <span>Misi Harian</span>
+                    <span className="font-mono-num text-emerald-300">
+                      {completedMissionsCount}/3 Selesai
+                    </span>
+                  </div>
+
+                  {dailyMissions.tasks.map((task) => {
+                    const isDone = task.progress >= task.target;
+                    const pct = Math.min(100, Math.round((task.progress / task.target) * 100));
+                    return (
+                      <div
+                        key={task.id}
+                        className={`rounded-lg border px-2 py-1.5 ${
+                          task.claimed
+                            ? 'bg-emerald-950/35 border-emerald-500/35 opacity-80'
+                            : isDone
+                            ? 'bg-amber-950/45 border-amber-400/70'
+                            : 'bg-slate-900/80 border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="font-semibold text-[11px] text-slate-100 leading-tight flex items-center gap-1">
+                            {task.claimed && (
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                            )}
+                            <span>{task.label}</span>
+                          </span>
+                          <span className="font-mono-num text-[10px] font-bold text-amber-200 shrink-0">
+                            {task.progress}/{task.target}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-950 overflow-hidden my-1">
+                          <div
+                            style={{ width: `${pct}%` }}
+                            className={`h-full transition-all ${
+                              isDone ? 'bg-emerald-400' : 'bg-amber-400'
+                            }`}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-1 text-[10px]">
+                          <span className="text-slate-400 font-mono-num">
+                            +{task.rewardPoints} Poin · {formatRupiah(task.rewardMoney)}
+                          </span>
+                          {task.claimed ? (
+                            <span className="text-emerald-400 font-bold">Diklaim</span>
+                          ) : isDone ? (
+                            <button
+                              onClick={() => handleClaimDailyMission(task.id)}
+                              className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px]"
+                            >
+                              Klaim
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Grand Bonus saat 3/3 Misi Harian selesai */}
+                  {allMissionsDone && !dailyMissions.bonusClaimed && (
+                    <button
+                      onClick={handleClaimDailyBonus}
+                      className="w-full py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-400 to-emerald-400 hover:brightness-105 text-slate-950 font-bold text-[10px] flex items-center justify-center gap-1 shadow"
+                    >
+                      <Gift className="w-3.5 h-3.5" />
+                      <span>
+                        Klaim Bonus 3/3 (+{DAILY_MISSION_GRAND_BONUS.points} Poin &amp;{' '}
+                        {formatRupiah(DAILY_MISSION_GRAND_BONUS.money)})
+                      </span>
+                    </button>
+                  )}
+                  {dailyMissions.bonusClaimed && (
+                    <div className="text-center text-[10px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-500/40 rounded-lg py-1">
+                      Bonus Misi Harian 3/3 sudah diklaim!
+                    </div>
+                  )}
                 </div>
-              )}
-              {gameState.isInjured && (
-                <div className="p-2 rounded-lg bg-rose-950/80 border border-rose-400/60 text-rose-200 flex items-start gap-1.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-300 mt-0.5" />
-                  <span>Kaki Arga masih pemulihan. Hati-hati menyeberang jalan!</span>
+
+                <div className="text-[10px] sm:text-[11px] text-slate-400">
+                  Sapa warga hari ini: {gameState.greetedNpcsToday.length}/{NPCS.length} · Kepuasan:{' '}
+                  {gameState.wargaSatisfaction}%
                 </div>
-              )}
-              <div className="text-[10px] sm:text-[11px] text-slate-400">
-                Sapa warga hari ini: {gameState.greetedNpcsToday.length}/{NPCS.length} · Kepuasan:{' '}
-                {gameState.wargaSatisfaction}%
               </div>
-            </div>
-          )}
-        </aside>
-      )}
+            )}
+          </aside>
+        );
+      })()}
 
       {/* RIGHT FLOATING PANEL: KERJA SAMPINGAN TRADISIONAL SUNDA */}
       {activeModal === null && gameState.scene !== 'warung_interior' && gameState.scene !== 'warung_asih' && (
@@ -1647,6 +1898,9 @@ export default function App() {
             const prayer = activePrayerAlert.prayer;
             setGameState((prev) => {
               const { next } = advanceClockState(prev, 12);
+              const nextPrayed = next.prayedToday.includes(prayer)
+                ? next.prayedToday
+                : [...next.prayedToday, prayer];
               return {
                 ...next,
                 scene: where === 'masjid' ? 'kampung_warung' : 'rumah_kamar',
@@ -1656,9 +1910,15 @@ export default function App() {
                   where === 'masjid'
                     ? Math.min(5, Number((next.reputation + 0.05).toFixed(2)))
                     : next.reputation,
-                prayedToday: next.prayedToday.includes(prayer) ? next.prayedToday : [...next.prayedToday, prayer],
+                prayedToday: nextPrayed,
                 activityPoints: computeEffectiveActivityPoints(prev) + 10,
                 totalPrayersCount: (next.totalPrayersCount ?? 0) + 1,
+                dailyMissions: ensureDailyMissions(
+                  next.day,
+                  next.dailyMissions,
+                  next.greetedNpcsToday.length,
+                  nextPrayed.length
+                ),
               };
             });
             setActiveModal(null);
@@ -1828,6 +2088,14 @@ export default function App() {
                   ...next.inventory,
                   [fishId]: (next.inventory[fishId] ?? 0) + 1,
                 },
+                dailyMissions: advanceDailyMissionProgress(
+                  next.dailyMissions,
+                  next.day,
+                  'catch_fish',
+                  1,
+                  next.greetedNpcsToday.length,
+                  next.prayedToday.length
+                ),
               };
             });
           }}

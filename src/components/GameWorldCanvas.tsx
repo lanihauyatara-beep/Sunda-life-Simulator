@@ -17,6 +17,7 @@ import {
   isVehicleOperating,
 } from '../data/gameData';
 import { initSceneNpcs, LiveNpcState, stepSceneNpcs } from '../utils/npcController';
+import { soundEngine } from '../utils/audio';
 import { CharacterSprite } from './CharacterAvatar';
 import { VehicleSprite } from './VehicleSprite';
 
@@ -322,6 +323,28 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
     }, 140);
     return () => window.clearTimeout(fadeTimer);
   }, [weather, scene.isIndoor]);
+
+  // Contextual Pasar Tradisional ambience (tawar-menawar & riuh pedagang), responsive to stall proximity
+  const isAtPasarScene = scene.id === 'pasar';
+  const pasarStallProximity = isAtPasarScene
+    ? renderPos.x >= 52
+      ? 1.18
+      : renderPos.x >= 30
+      ? 0.92
+      : 0.68
+    : 0;
+  const pasarTimeBucket = Math.floor(minutesOfDay / 30);
+
+  useEffect(() => {
+    const active = isAtPasarScene && !isPaused;
+    soundEngine.setPasarAmbience(active, pasarTimeBucket * 30, pasarStallProximity);
+  }, [isAtPasarScene, isPaused, pasarTimeBucket, pasarStallProximity]);
+
+  useEffect(() => {
+    return () => {
+      soundEngine.setPasarAmbience(false);
+    };
+  }, []);
 
   // Sync incoming playerPos ONLY when scene changes or teleported far from local posRef
   useEffect(() => {
