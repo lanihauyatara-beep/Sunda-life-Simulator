@@ -907,6 +907,9 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
               accentColor={npc.accentColor}
               hatType={npc.hatType}
               facing={npcFacing}
+              moveDir={live?.moveDir}
+              motionState={isPaused ? 'idle' : live?.motionState}
+              walkCadenceSec={live?.walkCadenceSec}
               isMoving={npcMoving}
             />
           </button>

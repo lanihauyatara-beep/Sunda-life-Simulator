@@ -160,34 +160,48 @@
   }
 }
 
+@keyframes sundaWalkVertical {
+  0%, 100% {
+    transform: translateY(0px) scaleY(1);
+  }
+  50% {
+    transform: translateY(-2.4px) scaleY(0.985);
+  }
+}
+
 .sunda-walk-bob {
   transform-origin: 32px 58px;
-  animation: sundaWalkBob 0.52s ease-in-out infinite;
+  animation: sundaWalkBob var(--walk-cadence, 0.52s) ease-in-out infinite;
+}
+
+.sunda-walk-vertical {
+  transform-origin: 32px 58px;
+  animation: sundaWalkVertical var(--walk-cadence, 0.52s) ease-in-out infinite;
 }
 
 .sunda-walk-leg-l {
   transform-origin: 25px 57px;
-  animation: sundaWalkLegL 0.52s ease-in-out infinite;
+  animation: sundaWalkLegL var(--walk-cadence, 0.52s) ease-in-out infinite;
 }
 
 .sunda-walk-leg-r {
   transform-origin: 39px 57px;
-  animation: sundaWalkLegR 0.52s ease-in-out infinite;
+  animation: sundaWalkLegR var(--walk-cadence, 0.52s) ease-in-out infinite;
 }
 
 .sunda-walk-arm-l {
   transform-origin: 17px 33px;
-  animation: sundaWalkArmL 0.52s ease-in-out infinite;
+  animation: sundaWalkArmL var(--walk-cadence, 0.52s) ease-in-out infinite;
 }
 
 .sunda-walk-arm-r {
   transform-origin: 46px 33px;
-  animation: sundaWalkArmR 0.52s ease-in-out infinite;
+  animation: sundaWalkArmR var(--walk-cadence, 0.52s) ease-in-out infinite;
 }
 
 .sunda-walk-shadow {
   transform-origin: 32px 89px;
-  animation: sundaWalkShadow 0.52s ease-in-out infinite;
+  animation: sundaWalkShadow var(--walk-cadence, 0.52s) ease-in-out infinite;
 }
 
 .sunda-idle-breath {

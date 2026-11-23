@@ -5,16 +5,44 @@ export interface Point2D {
   y: number;
 }
 
+export type NpcMotionState = 'idle' | 'walking' | 'transitioning' | 'talking_pause';
+export type NpcDirection = 'left' | 'right' | 'up' | 'down';
+
 export interface LiveNpcState {
   x: number;
   y: number;
   facing: 'left' | 'right';
+  moveDir: NpcDirection;
+  motionState: NpcMotionState;
+  walkCadenceSec: number;
   isMoving: boolean;
   slotId: string;
   wpIndex: number;
   routeQueue: Point2D[];
   pauseUntil: number;
   destinationLabel?: string;
+}
+
+function computeDirectionAndCadence(
+  dx: number,
+  dy: number,
+  prevFacing: 'left' | 'right',
+  effectiveSpeed: number
+): { facing: 'left' | 'right'; moveDir: NpcDirection; walkCadenceSec: number } {
+  const facing: 'left' | 'right' =
+    dx < -0.04 ? 'left' : dx > 0.04 ? 'right' : prevFacing;
+
+  let moveDir: NpcDirection = facing;
+  if (Math.abs(dy) > Math.abs(dx) * 1.15 && Math.abs(dy) > 0.15) {
+    moveDir = dy < 0 ? 'up' : 'down';
+  } else if (Math.abs(dx) > 0.04) {
+    moveDir = dx < 0 ? 'left' : 'right';
+  }
+
+  const walkCadenceSec = Number(
+    Math.max(0.38, Math.min(0.66, 3.25 / Math.max(4.0, effectiveSpeed))).toFixed(2)
+  );
+  return { facing, moveDir, walkCadenceSec };
 }
 
 const GRID_MIN_X = 6;
@@ -325,13 +353,24 @@ export function initSceneNpcs(
       : [];
 
     const firstStep = routeQueue[0] ?? nextWp;
-    const initialFacing: 'left' | 'right' = firstStep.x < startWp.x ? 'left' : 'right';
+    const dxInit = firstStep.x - startWp.x;
+    const dyInit = firstStep.y - startWp.y;
+    const baseSpeed = npc.walkSpeed ?? 6.2;
+    const { facing: initialFacing, moveDir, walkCadenceSec } = computeDirectionAndCadence(
+      dxInit,
+      dyInit,
+      dxInit < 0 ? 'left' : 'right',
+      baseSpeed
+    );
 
     result[npc.id] = {
       x: startWp.x,
       y: startWp.y,
       facing: initialFacing,
-      isMoving: false,
+      moveDir,
+      motionState: hasMultiple && idx === 0 ? 'walking' : 'idle',
+      walkCadenceSec,
+      isMoving: hasMultiple && idx === 0,
       slotId: schedule.slotId,
       wpIndex: nextIdx,
       routeQueue,
@@ -363,10 +402,14 @@ export function stepSceneNpcs(
   for (const npc of npcsInScene) {
     const schedule = resolveScheduleForTime(npc, minutesOfDay);
     const waypoints = schedule.waypoints;
+    const baseSpeed = npc.walkSpeed ?? 6.2;
     const curr: LiveNpcState = prevMap[npc.id] ?? {
       x: npc.x,
       y: npc.y,
       facing: 'right',
+      moveDir: 'right',
+      motionState: 'idle',
+      walkCadenceSec: Number(Math.max(0.38, Math.min(0.66, 3.25 / baseSpeed)).toFixed(2)),
       isMoving: false,
       slotId: schedule.slotId,
       wpIndex: waypoints.length >= 2 ? 1 : 0,
@@ -382,14 +425,20 @@ export function stepSceneNpcs(
       const dxPlayer = playerPos.x - curr.x;
       const faceToPlayer: 'left' | 'right' =
         Math.abs(dxPlayer) > 0.6 ? (dxPlayer < 0 ? 'left' : 'right') : curr.facing;
-      if (curr.isMoving || curr.facing !== faceToPlayer) {
+      if (
+        curr.isMoving ||
+        curr.facing !== faceToPlayer ||
+        curr.motionState !== 'talking_pause'
+      ) {
         anyChanged = true;
         visualChanged = true;
       }
       nextMap[npc.id] = {
         ...curr,
         isMoving: false,
+        motionState: 'talking_pause',
         facing: faceToPlayer,
+        moveDir: faceToPlayer,
       };
       continue;
     }
@@ -402,6 +451,13 @@ export function stepSceneNpcs(
         { x: targetWp.x, y: targetWp.y },
         obstacles
       );
+      const nextStep = newRoute[0] ?? targetWp;
+      const { facing, moveDir, walkCadenceSec } = computeDirectionAndCadence(
+        nextStep.x - curr.x,
+        nextStep.y - curr.y,
+        curr.facing,
+        baseSpeed * 1.15
+      );
       anyChanged = true;
       visualChanged = true;
       nextMap[npc.id] = {
@@ -410,6 +466,11 @@ export function stepSceneNpcs(
         wpIndex: 0,
         routeQueue: newRoute,
         pauseUntil: 0,
+        facing,
+        moveDir,
+        motionState: 'transitioning',
+        walkCadenceSec,
+        isMoving: newRoute.length > 0,
         destinationLabel: targetWp.label,
       };
       continue;
@@ -417,11 +478,11 @@ export function stepSceneNpcs(
 
     // 3. Pause naturally at landmark before dispatching next path
     if (now < curr.pauseUntil) {
-      if (curr.isMoving) {
+      if (curr.isMoving || curr.motionState !== 'idle') {
         anyChanged = true;
         visualChanged = true;
       }
-      nextMap[npc.id] = { ...curr, isMoving: false };
+      nextMap[npc.id] = { ...curr, isMoving: false, motionState: 'idle' };
       continue;
     }
 
@@ -429,6 +490,8 @@ export function stepSceneNpcs(
     let routeQueue = curr.routeQueue;
     let wpIndex = curr.wpIndex;
     let destinationLabel = curr.destinationLabel;
+    let activeMotionState: NpcMotionState =
+      curr.motionState === 'transitioning' ? 'transitioning' : 'walking';
 
     if (routeQueue.length === 0) {
       if (waypoints.length >= 2) {
@@ -440,6 +503,7 @@ export function stepSceneNpcs(
           obstacles
         );
         destinationLabel = targetWp.label;
+        activeMotionState = 'walking';
         anyChanged = true;
       } else {
         const homeWp = waypoints[0] ?? { x: npc.x, y: npc.y };
@@ -451,13 +515,14 @@ export function stepSceneNpcs(
             obstacles
           );
           destinationLabel = homeWp.label;
+          activeMotionState = 'walking';
           anyChanged = true;
         } else {
-          if (curr.isMoving) {
+          if (curr.isMoving || curr.motionState !== 'idle') {
             anyChanged = true;
             visualChanged = true;
           }
-          nextMap[npc.id] = { ...curr, isMoving: false };
+          nextMap[npc.id] = { ...curr, isMoving: false, motionState: 'idle' };
           continue;
         }
       }
@@ -466,21 +531,40 @@ export function stepSceneNpcs(
     // 5. Walk smoothly along the A* smoothed routeQueue
     const nextNode = routeQueue[0];
     if (!nextNode) {
-      nextMap[npc.id] = { ...curr, isMoving: false, wpIndex, destinationLabel };
+      nextMap[npc.id] = {
+        ...curr,
+        isMoving: false,
+        motionState: 'idle',
+        wpIndex,
+        destinationLabel,
+      };
       continue;
     }
 
     const dx = nextNode.x - curr.x;
     const dy = nextNode.y - curr.y;
     const dist = Math.hypot(dx, dy);
-    const speed = npc.walkSpeed ?? 6.2;
-    const stepDist = speed * dt;
+    const effectiveSpeed = activeMotionState === 'transitioning' ? baseSpeed * 1.15 : baseSpeed;
+    const stepDist = effectiveSpeed * dt;
 
     if (dist <= Math.max(0.45, stepDist)) {
       const remainingQueue = routeQueue.slice(1);
       const arrivedAtLandmark = remainingQueue.length === 0;
       const targetWp = waypoints[wpIndex % waypoints.length];
       const pauseMs = arrivedAtLandmark ? (targetWp?.pauseSec ?? 3.2) * 1000 : 0;
+      const nextStepNode = remainingQueue[0];
+      const { facing, moveDir, walkCadenceSec } = nextStepNode
+        ? computeDirectionAndCadence(
+            nextStepNode.x - nextNode.x,
+            nextStepNode.y - nextNode.y,
+            curr.facing,
+            effectiveSpeed
+          )
+        : {
+            facing: curr.facing,
+            moveDir: curr.moveDir,
+            walkCadenceSec: curr.walkCadenceSec,
+          };
 
       anyChanged = true;
       if (arrivedAtLandmark) {
@@ -491,6 +575,10 @@ export function stepSceneNpcs(
         ...curr,
         x: nextNode.x,
         y: nextNode.y,
+        facing,
+        moveDir,
+        walkCadenceSec,
+        motionState: arrivedAtLandmark ? 'idle' : activeMotionState,
         isMoving: !arrivedAtLandmark,
         wpIndex,
         routeQueue: remainingQueue,
@@ -500,11 +588,20 @@ export function stepSceneNpcs(
     } else {
       const nx = curr.x + (dx / dist) * stepDist;
       const ny = curr.y + (dy / dist) * stepDist;
-      const nextFacing: 'left' | 'right' =
-        dx < -0.04 ? 'left' : dx > 0.04 ? 'right' : curr.facing;
+      const { facing: nextFacing, moveDir, walkCadenceSec } = computeDirectionAndCadence(
+        dx,
+        dy,
+        curr.facing,
+        effectiveSpeed
+      );
 
       anyChanged = true;
-      if (!curr.isMoving || curr.facing !== nextFacing) {
+      if (
+        !curr.isMoving ||
+        curr.facing !== nextFacing ||
+        curr.moveDir !== moveDir ||
+        curr.motionState !== activeMotionState
+      ) {
         visualChanged = true;
       }
 
@@ -513,6 +610,9 @@ export function stepSceneNpcs(
         x: nx,
         y: ny,
         facing: nextFacing,
+        moveDir,
+        motionState: activeMotionState,
+        walkCadenceSec,
         isMoving: true,
         wpIndex,
         routeQueue,

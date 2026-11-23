@@ -1,5 +1,7 @@
 import React from 'react';
 
+import type { NpcDirection, NpcMotionState } from '../utils/npcController';
+
 interface CharacterSpriteProps {
   name: string;
   shirtColor: string;
@@ -8,6 +10,9 @@ interface CharacterSpriteProps {
   isArga?: boolean;
   isInjured?: boolean;
   facing?: 'left' | 'right';
+  moveDir?: NpcDirection;
+  motionState?: NpcMotionState;
+  walkCadenceSec?: number;
   isMoving?: boolean;
 }
 
@@ -19,11 +24,21 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
   isArga = false,
   isInjured = false,
   facing = 'right',
+  moveDir,
+  motionState,
+  walkCadenceSec = 0.52,
   isMoving = false,
 }) => {
   const uid = React.useId().replace(/:/g, '');
   const skinGradId = `skin_${uid}`;
   const shirtGradId = `shirt_${uid}`;
+  const isVerticalWalk = isMoving && (moveDir === 'up' || moveDir === 'down');
+  const isTransitionWalk = isMoving && motionState === 'transitioning';
+  const bodyMotionClass = !isMoving
+    ? 'sunda-idle-breath'
+    : isVerticalWalk
+    ? 'sunda-walk-vertical'
+    : 'sunda-walk-bob';
 
   return (
     <div className="flex flex-col items-center pointer-events-none select-none">
@@ -40,9 +55,10 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
 
       <svg
         viewBox="0 0 64 96"
+        style={{ '--walk-cadence': `${walkCadenceSec}s` } as React.CSSProperties}
         className={`w-13 h-20 drop-shadow-[0_7px_6px_rgba(0,0,0,0.55)] transition-transform duration-150 ${
           facing === 'left' ? 'scale-x-[-1]' : ''
-        }`}
+        } ${isTransitionWalk ? 'brightness-105' : ''}`}
       >
         <defs>
           <linearGradient id={skinGradId} x1="0" y1="0" x2="1" y2="1">
@@ -98,8 +114,8 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
           <path d="M35 85 Q39.5 83 44 85" stroke="#b45309" strokeWidth="1.3" fill="none" />
         </g>
 
-        {/* Upper body stride bob / idle breathing */}
-        <g className={isMoving ? 'sunda-walk-bob' : 'sunda-idle-breath'}>
+        {/* Upper body stride bob / vertical walk / idle breathing */}
+        <g className={bodyMotionClass}>
           {/* Back Arm */}
           <g className={isMoving ? 'sunda-walk-arm-l' : ''}>
             <path
