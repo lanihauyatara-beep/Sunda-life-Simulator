@@ -630,45 +630,95 @@ export const ITEM_MAP: Record<string, ItemDef> = Object.fromEntries(ITEMS.map((i
 
 export const VEHICLE_INFO: Record<
   VehicleType,
-  { label: string; speedRange: [number, number]; medicalCost: number; desc: string }
+  {
+    label: string;
+    speedRange: [number, number];
+    medicalCost: number;
+    desc: string;
+    openMin: number;
+    closeMin: number;
+    scheduleLabel: string;
+    cultureNote: string;
+  }
 > = {
-  mobil: {
-    label: 'Mobil Keluarga',
-    speedRange: [18, 25],
-    medicalCost: 200000,
-    desc: 'Mobil pribadi melaju cukup kencang di jalan desa.',
-  },
   angkot: {
     label: 'Angkot Hijau',
     speedRange: [14, 20],
     medicalCost: 120000,
     desc: 'Angkutan kota trayek Kampung - Pasar Tradisional.',
+    openMin: 7 * 60, // 07.00 WIB
+    closeMin: 21 * 60, // 21.00 WIB
+    scheduleLabel: '07.00–21.00 WIB',
+    cultureNote: 'Trayek desa aktif pukul 07.00–21.00 WIB',
   },
   motor: {
     label: 'Sepeda Motor',
     speedRange: [19, 27],
     medicalCost: 75000,
-    desc: 'Motor warga yang sering menyalip di jalan kampung.',
-  },
-  pedati: {
-    label: 'Pedati Kerbau',
-    speedRange: [6, 9],
-    medicalCost: 50000,
-    desc: 'Pedati kayu tradisional pengangkut hasil panen sawah.',
-  },
-  delman: {
-    label: 'Delman Hias',
-    speedRange: [8, 12],
-    medicalCost: 60000,
-    desc: 'Kereta kuda tradisional Sunda milik Mang Tatang.',
+    desc: 'Motor warga & ojek pangkalan kampung Sunda.',
+    openMin: 5 * 60, // 05.00 WIB (ba'da Subuh)
+    closeMin: 23 * 60, // 23.00 WIB (malam)
+    scheduleLabel: '05.00–23.00 WIB',
+    cultureNote: 'Ojek & motor warga aktif dari Subuh sampai larut malam',
   },
   becak: {
     label: 'Becak Kampung',
     speedRange: [7, 10],
     medicalCost: 50000,
     desc: 'Becak kayuh roda tiga mangkal di persimpangan.',
+    openMin: 5 * 60, // 05.00 WIB (warga belanja pagi ke pasar)
+    closeMin: 20 * 60, // 20.00 WIB (ba'da Isya)
+    scheduleLabel: '05.00–20.00 WIB',
+    cultureNote: 'Mangkal sejak pagi buta untuk belanja pasar hingga Isya',
+  },
+  delman: {
+    label: 'Delman Hias',
+    speedRange: [8, 12],
+    medicalCost: 60000,
+    desc: 'Kereta kuda tradisional Sunda milik Mang Tatang.',
+    openMin: 6 * 60, // 06.00 WIB
+    closeMin: 18 * 60, // 18.00 WIB (Maghrib kuda istirahat)
+    scheduleLabel: '06.00–18.00 WIB',
+    cultureNote: 'Beroperasi pagi hingga Maghrib sebelum kuda beristirahat',
+  },
+  pedati: {
+    label: 'Pedati Kerbau',
+    speedRange: [6, 9],
+    medicalCost: 50000,
+    desc: 'Pedati kayu tradisional pengangkut hasil panen sawah.',
+    openMin: 5 * 60 + 30, // 05.30 WIB
+    closeMin: 17 * 60 + 30, // 17.30 WIB (sebelum petang)
+    scheduleLabel: '05.30–17.30 WIB',
+    cultureNote: 'Mengangkut hasil sawah dari pagi hingga menjelang petang',
+  },
+  mobil: {
+    label: 'Mobil Keluarga',
+    speedRange: [18, 25],
+    medicalCost: 200000,
+    desc: 'Mobil pribadi melaju cukup kencang di jalan desa.',
+    openMin: 6 * 60, // 06.00 WIB
+    closeMin: 22 * 60, // 22.00 WIB (malam kampung tenang)
+    scheduleLabel: '06.00–22.00 WIB',
+    cultureNote: 'Kendaraan warga melintas pukul 06.00–22.00 WIB',
   },
 };
+
+export function isVehicleOperating(vType: VehicleType, minutesOfDay: number): boolean {
+  const info = VEHICLE_INFO[vType];
+  const m = ((Math.floor(minutesOfDay) % 1440) + 1440) % 1440;
+  if (info.openMin <= info.closeMin) {
+    return m >= info.openMin && m < info.closeMin;
+  }
+  return m >= info.openMin || m < info.closeMin;
+}
+
+export function getOperatingVehicles(
+  allowed: VehicleType[] | undefined,
+  minutesOfDay: number
+): VehicleType[] {
+  if (!allowed || allowed.length === 0) return [];
+  return allowed.filter((v) => isVehicleOperating(v, minutesOfDay));
+}
 
 export const TRANSPORT_TO_PASAR_OPTIONS = [
   {
@@ -676,7 +726,7 @@ export const TRANSPORT_TO_PASAR_OPTIONS = [
     name: 'Naik Angkot',
     fare: 5000,
     minutes: 25,
-    note: 'Tarif standar Rp 5.000 pergi / Rp 5.000 pulang',
+    note: 'Tarif Rp 5.000 · Operasi 07.00–21.00 WIB',
     vehicle: 'angkot' as VehicleType,
   },
   {
@@ -684,7 +734,7 @@ export const TRANSPORT_TO_PASAR_OPTIONS = [
     name: 'Ojek Motor Kang Dadan',
     fare: 10000,
     minutes: 12,
-    note: 'Lebih cepat sampai ke Pasar (Rp 10.000)',
+    note: 'Cepat sampai · Operasi 05.00–23.00 WIB',
     vehicle: 'motor' as VehicleType,
   },
   {
@@ -692,7 +742,7 @@ export const TRANSPORT_TO_PASAR_OPTIONS = [
     name: 'Naik Becak Mang Eman',
     fare: 12000,
     minutes: 35,
-    note: 'Santai menikmati angin sawah (Rp 12.000)',
+    note: 'Santai pagi–malam · Operasi 05.00–20.00 WIB',
     vehicle: 'becak' as VehicleType,
   },
   {
@@ -700,7 +750,7 @@ export const TRANSPORT_TO_PASAR_OPTIONS = [
     name: 'Naik Delman Mang Tatang',
     fare: 15000,
     minutes: 30,
-    note: 'Klasik berkereta kuda tradisional Sunda (Rp 15.000)',
+    note: 'Khas Sunda · Operasi 06.00–18.00 WIB',
     vehicle: 'delman' as VehicleType,
   },
 ];
@@ -711,21 +761,24 @@ export const DELIVERY_OPTIONS = [
     name: 'Bawa Sendiri (Tenteng)',
     ongkir: 0,
     maxUnits: 15,
-    note: 'Gratis ongkir, maksimal muat 15 barang',
+    vehicle: undefined as VehicleType | undefined,
+    note: 'Gratis ongkir, maksimal muat 15 barang (24 jam)',
   },
   {
     id: 'mamang_becak',
     name: 'Kirim Mamang Becak',
     ongkir: 10000,
     maxUnits: 45,
-    note: 'Ongkos kirim Rp 10.000 langsung ke gudang Warung Arga (maks 45 barang)',
+    vehicle: 'becak' as VehicleType | undefined,
+    note: 'Ongkir Rp 10.000 (maks 45 pcs) · Operasi 05.00–20.00 WIB',
   },
   {
     id: 'mamang_delman',
     name: 'Kirim Mamang Delman',
     ongkir: 15000,
     maxUnits: 999,
-    note: 'Ongkos kirim Rp 15.000 kapasitas besar tanpa batas langsung ke Warung Arga',
+    vehicle: 'delman' as VehicleType | undefined,
+    note: 'Ongkir Rp 15.000 tanpa batas · Operasi 06.00–18.00 WIB',
   },
 ];
 
@@ -777,7 +830,7 @@ export const SCENES: Record<SceneId, SceneDef> = {
       {
         id: 'enter_warung_asih',
         label: 'Mampir Warung Asih',
-        subtitle: 'Ngopi & makan tambah energi',
+        subtitle: 'Ngopi & sarapan Sunda (05.00–22.00)',
         x: 47,
         y: 44,
         actionType: 'enter_scene',
@@ -794,7 +847,7 @@ export const SCENES: Record<SceneId, SceneDef> = {
       {
         id: 'halte_pasar',
         label: 'Halte Ke Pasar',
-        subtitle: 'Angkot Rp 5.000 · Becak · Delman',
+        subtitle: 'Angkot (07.00–21.00) · Ojek · Becak · Delman',
         x: 16,
         y: 78,
         actionType: 'open_pasar_transport',
@@ -832,7 +885,7 @@ export const SCENES: Record<SceneId, SceneDef> = {
   warung_asih: {
     id: 'warung_asih',
     name: 'WARUNG ASIH (NGOPI & MAKAN)',
-    subtitle: 'Saung Kopi, Surabi & Kuliner Sunda Penambah Energi',
+    subtitle: 'Saung Kopi, Surabi & Kuliner Sunda (Buka 05.00–22.00 WIB)',
     bgImage: ASSETS.warung_asih,
     isIndoor: true,
     hasRoad: false,

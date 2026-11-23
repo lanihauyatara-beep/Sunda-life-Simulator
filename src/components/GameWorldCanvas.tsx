@@ -11,7 +11,11 @@ import {
   VehicleType,
   WeatherCondition,
 } from '../types/game';
-import { VEHICLE_INFO } from '../data/gameData';
+import {
+  VEHICLE_INFO,
+  getOperatingVehicles,
+  isVehicleOperating,
+} from '../data/gameData';
 import { initSceneNpcs, LiveNpcState, stepSceneNpcs } from '../utils/npcController';
 import { CharacterSprite } from './CharacterAvatar';
 import { VehicleSprite } from './VehicleSprite';
@@ -311,6 +315,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
     const rect = containerRef.current?.getBoundingClientRect();
     const aspect = rect && rect.height > 0 ? rect.width / rect.height : 16 / 9;
     const allowed = scene.allowedVehicles;
+    const operating = getOperatingVehicles(allowed, minutesOfDayRef.current);
     const roadLen = getRoadTotalLength(scene.roadPath.points, aspect);
     const now = performance.now();
 
@@ -322,20 +327,25 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
 
     const waitMap: Record<string, number> = {};
     const initial: MovingVehicle[] = configs.map((cfg, i) => {
-      const vType = allowed[(i + Math.floor(Math.random() * allowed.length)) % allowed.length];
+      const pool = operating.length > 0 ? operating : allowed;
+      const vType = pool[(i + Math.floor(Math.random() * pool.length)) % pool.length];
       const info = VEHICLE_INFO[vType];
       const linearSpd =
         info.speedRange[0] + Math.random() * (info.speedRange[1] - info.speedRange[0]);
       const progSpeed = linearSpd / Math.max(80, roadLen);
-      const sampled = sampleRoadPolyline(scene.roadPath!, cfg.prog, cfg.dir, aspect);
+      // Park offscreen if no vehicles operate at this hour (23.00-05.00 WIB)
+      const startProg = operating.length > 0 ? cfg.prog : cfg.dir === 1 ? 0.0 : 1.0;
+      const sampled = sampleRoadPolyline(scene.roadPath!, startProg, cfg.dir, aspect);
       const uid = `${scene.id}_v_${i}_${Date.now()}`;
-      if (cfg.delayMs > 0) {
+      if (operating.length === 0) {
+        waitMap[uid] = now + 2000;
+      } else if (cfg.delayMs > 0) {
         waitMap[uid] = now + cfg.delayMs;
       }
       return {
         uid,
         type: vType,
-        progress: cfg.prog,
+        progress: startProg,
         x: sampled.x,
         y: sampled.y,
         angleDeg: sampled.angleDeg,
@@ -460,6 +470,8 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
           const rect = containerRef.current?.getBoundingClientRect();
           const aspect = rect && rect.height > 0 ? rect.width / rect.height : 16 / 9;
           const allowed = scene.allowedVehicles;
+          const curMinutes = minutesOfDayRef.current;
+          const operating = getOperatingVehicles(allowed, curMinutes);
           const roadPath = scene.roadPath;
           const roadLen = getRoadTotalLength(roadPath.points, aspect);
           let hitVehicle: VehicleType | null = null;
@@ -470,20 +482,40 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
               return v;
             }
 
-            let nextProg = v.progress + v.direction * v.speed * dt;
+            const atEdge = v.progress <= 0.005 || v.progress >= 0.995;
+            if (atEdge && operating.length === 0) {
+              // Keep parked off-screen during quiet late night hours (23.00-05.00 WIB)
+              vehicleWaitUntilRef.current[v.uid] = now + 2000;
+              return v;
+            }
+
             let nextType = v.type;
             let nextSpeed = v.speed;
             let nextCost = v.medicalCost;
 
-            if (nextProg > 1.0 || nextProg < 0.0) {
-              // Pause naturally before next vehicle enters so village road isn't crowded
-              vehicleWaitUntilRef.current[v.uid] = now + 2600 + Math.random() * 3400;
-              nextType = allowed[Math.floor(Math.random() * allowed.length)];
+            // If waiting off-screen and previous vehicle type just went off-hours, swap before entering
+            if (atEdge && !isVehicleOperating(nextType, curMinutes) && operating.length > 0) {
+              nextType = operating[Math.floor(Math.random() * operating.length)];
               const info = VEHICLE_INFO[nextType];
               const linearSpd =
                 info.speedRange[0] + Math.random() * (info.speedRange[1] - info.speedRange[0]);
               nextSpeed = linearSpd / Math.max(80, roadLen);
               nextCost = info.medicalCost;
+            }
+
+            let nextProg = v.progress + v.direction * nextSpeed * dt;
+
+            if (nextProg > 1.0 || nextProg < 0.0) {
+              // Pause naturally before next vehicle enters so village road isn't crowded
+              vehicleWaitUntilRef.current[v.uid] = now + 2600 + Math.random() * 3400;
+              if (operating.length > 0) {
+                nextType = operating[Math.floor(Math.random() * operating.length)];
+                const info = VEHICLE_INFO[nextType];
+                const linearSpd =
+                  info.speedRange[0] + Math.random() * (info.speedRange[1] - info.speedRange[0]);
+                nextSpeed = linearSpd / Math.max(80, roadLen);
+                nextCost = info.medicalCost;
+              }
               nextProg = v.direction === 1 ? 0.0 : 1.0;
             }
 
@@ -687,9 +719,11 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         : 16
       : 0;
 
+  const operatingRoadVehicles = getOperatingVehicles(scene.allowedVehicles, minutesOfDay);
   const nearRoad =
     scene.hasRoad &&
     scene.roadPath &&
+    operatingRoadVehicles.length > 0 &&
     distancePointToRoad(renderPos.x, renderPos.y, scene.roadPath.points) < 9.5;
 
   const handleStageClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -800,7 +834,25 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
       {!isPaused && nearRoad && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 rounded-lg bg-amber-950/90 border border-amber-400 text-amber-200 text-xs font-bold flex items-center gap-2 shadow-lg pointer-events-none">
           <AlertTriangle className="w-4 h-4 text-amber-400" />
-          <span>Hati-hati menyeberang! Waspada Angkot, Motor, Mobil, Delman, Becak & Pedati.</span>
+          <span>
+            Hati-hati menyeberang! Waspada{' '}
+            {operatingRoadVehicles
+              .map((vt) =>
+                vt === 'angkot'
+                  ? 'Angkot'
+                  : vt === 'motor'
+                  ? 'Motor'
+                  : vt === 'mobil'
+                  ? 'Mobil'
+                  : vt === 'delman'
+                  ? 'Delman'
+                  : vt === 'becak'
+                  ? 'Becak'
+                  : 'Pedati'
+              )
+              .join(', ')}
+            .
+          </span>
         </div>
       )}
 

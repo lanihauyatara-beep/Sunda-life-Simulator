@@ -5,8 +5,11 @@ import {
   ITEMS,
   SEASON_META,
   TRANSPORT_TO_PASAR_OPTIONS,
+  VEHICLE_INFO,
   WEATHER_META,
+  formatGameTime,
   formatRupiah,
+  isVehicleOperating,
 } from '../data/gameData';
 import { SeasonType, VehicleType, WeatherCondition } from '../types/game';
 import { useUiGamepadAction } from '../hooks/useGamepad';
@@ -15,6 +18,7 @@ import { VehicleSprite } from './VehicleSprite';
 interface TransportPasarModalProps {
   isAtPasar: boolean;
   money: number;
+  minutesOfDay: number;
   onSelectRide: (fare: number, minutes: number, vehicleName: string) => void;
   onClose: () => void;
 }
@@ -22,20 +26,27 @@ interface TransportPasarModalProps {
 export const TransportPasarModal: React.FC<TransportPasarModalProps> = ({
   isAtPasar,
   money,
+  minutesOfDay,
   onSelectRide,
   onClose,
 }) => {
   const [focusedIdx, setFocusedIdx] = useState(0);
+  const availableRides = TRANSPORT_TO_PASAR_OPTIONS.map((opt) => ({
+    ...opt,
+    isOpen: isVehicleOperating(opt.vehicle, minutesOfDay),
+    scheduleLabel: VEHICLE_INFO[opt.vehicle].scheduleLabel,
+  }));
+  const anyRideOpen = availableRides.some((r) => r.isOpen);
 
   useUiGamepadAction((btn) => {
-    const len = TRANSPORT_TO_PASAR_OPTIONS.length;
+    const len = availableRides.length;
     if (btn === 'DPAD_RIGHT' || btn === 'DPAD_DOWN') {
       setFocusedIdx((i) => (i + 1) % len);
     } else if (btn === 'DPAD_LEFT' || btn === 'DPAD_UP') {
       setFocusedIdx((i) => (i + len - 1) % len);
     } else if (btn === 'A') {
-      const opt = TRANSPORT_TO_PASAR_OPTIONS[focusedIdx];
-      if (opt && money >= opt.fare) {
+      const opt = availableRides[focusedIdx];
+      if (opt && opt.isOpen && money >= opt.fare) {
         onSelectRide(opt.fare, opt.minutes, opt.name);
       }
     }
@@ -51,36 +62,50 @@ export const TransportPasarModal: React.FC<TransportPasarModalProps> = ({
         <h2 className="font-display text-2xl font-bold text-amber-50 mb-1">
           {isAtPasar ? 'Pilih Kendaraan Pulang ke Kampung' : 'Pilih Kendaraan Menuju Pasar'}
         </h2>
-        <p className="text-xs text-slate-300 mb-4">
-          Letak Pasar Tradisional cukup jauh dari kampung sehingga harus menaiki kendaraan (Angkot Rp 5.000 pergi &
-          Rp 5.000 pulang, atau naik Ojek / Becak / Delman). Saldo Arga:{' '}
-          <strong className="text-emerald-300 font-mono-num">{formatRupiah(money)}</strong>
+        <p className="text-xs text-slate-300 mb-3">
+          Pukul <strong className="font-mono-num text-amber-300">{formatGameTime(minutesOfDay)} WIB</strong> · Angkot
+          beroperasi <strong>07.00–21.00 WIB</strong>, sedangkan ojek, becak &amp; delman mengikuti jam aktivitas warga
+          Sunda. Saldo Arga: <strong className="text-emerald-300 font-mono-num">{formatRupiah(money)}</strong>
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-          {TRANSPORT_TO_PASAR_OPTIONS.map((opt, idx) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          {availableRides.map((opt, idx) => {
             const affordable = money >= opt.fare;
+            const canRide = opt.isOpen && affordable;
             const isFocused = focusedIdx === idx;
             return (
               <button
                 key={opt.id}
-                disabled={!affordable}
+                disabled={!canRide}
                 onMouseEnter={() => setFocusedIdx(idx)}
                 onClick={() => onSelectRide(opt.fare, opt.minutes, opt.name)}
                 className={`p-3.5 rounded-xl border text-left transition-all flex items-center gap-3 ${
-                  affordable
+                  canRide
                     ? 'bg-slate-950/85 border-amber-400/60 hover:border-amber-300 hover:bg-slate-800'
-                    : 'bg-slate-950/40 border-slate-800 opacity-50 cursor-not-allowed'
+                    : 'bg-slate-950/40 border-slate-800 opacity-55 cursor-not-allowed'
                 } ${isFocused ? 'ally-focus' : ''}`}
               >
                 <div className="w-20 shrink-0 flex items-center justify-center">
                   <VehicleSprite type={opt.vehicle as VehicleType} direction={1} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm text-amber-100">{opt.name}</div>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="font-bold text-sm text-amber-100 truncate">{opt.name}</div>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold whitespace-nowrap ${
+                        opt.isOpen
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-400/40'
+                      }`}
+                    >
+                      {opt.isOpen ? 'Beroperasi' : 'Tutup'}
+                    </span>
+                  </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">{opt.note}</div>
                   <div className="flex items-center justify-between mt-2 text-xs font-mono-num">
-                    <span className="text-emerald-300 font-bold">{formatRupiah(opt.fare)}</span>
+                    <span className={opt.isOpen ? 'text-emerald-300 font-bold' : 'text-rose-300 font-semibold'}>
+                      {opt.isOpen ? formatRupiah(opt.fare) : `Buka ${opt.scheduleLabel}`}
+                    </span>
                     <span className="text-slate-300">{opt.minutes} menit</span>
                   </div>
                 </div>
@@ -88,6 +113,25 @@ export const TransportPasarModal: React.FC<TransportPasarModalProps> = ({
             );
           })}
         </div>
+
+        {!anyRideOpen && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-950/50 border border-amber-400/40 text-xs text-amber-100 flex flex-wrap items-center justify-between gap-2">
+            <span>
+              Semua angkutan sedang istirahat malam (23.00–05.00 WIB).{' '}
+              {isAtPasar
+                ? 'Arga bisa berjalan kaki pulang ke Kampung.'
+                : 'Tunggu pukul 05.00 WIB untuk Ojek/Becak atau 07.00 WIB untuk Angkot.'}
+            </span>
+            {isAtPasar && (
+              <button
+                onClick={() => onSelectRide(0, 45, 'Jalan Kaki')}
+                className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs"
+              >
+                Jalan Kaki Pulang (Gratis · 45 mnt)
+              </button>
+            )}
+          </div>
+        )}
 
         <button
           onClick={onClose}
@@ -102,6 +146,7 @@ export const TransportPasarModal: React.FC<TransportPasarModalProps> = ({
 
 interface PasarShopModalProps {
   money: number;
+  minutesOfDay: number;
   inventory: Record<string, number>;
   season: SeasonType;
   weather: WeatherCondition;
@@ -111,6 +156,7 @@ interface PasarShopModalProps {
 
 export const PasarShopModal: React.FC<PasarShopModalProps> = ({
   money,
+  minutesOfDay,
   inventory,
   season,
   weather,
@@ -124,7 +170,10 @@ export const PasarShopModal: React.FC<PasarShopModalProps> = ({
   const wholesaleItems = ITEMS.filter((i) => i.category === 'warung');
   const totalUnits = Object.values(cart).reduce((a, b) => a + b, 0);
   const subtotal = wholesaleItems.reduce((sum, it) => sum + (cart[it.id] ?? 0) * it.wholesalePrice, 0);
-  const selectedDelivery = DELIVERY_OPTIONS.find((d) => d.id === deliveryId) ?? DELIVERY_OPTIONS[0];
+  const isDeliveryOpen = (d: (typeof DELIVERY_OPTIONS)[number]) =>
+    !d.vehicle || isVehicleOperating(d.vehicle, minutesOfDay);
+  const candidateDelivery = DELIVERY_OPTIONS.find((d) => d.id === deliveryId) ?? DELIVERY_OPTIONS[0];
+  const selectedDelivery = isDeliveryOpen(candidateDelivery) ? candidateDelivery : DELIVERY_OPTIONS[0];
   const grandTotal = subtotal + (totalUnits > 0 ? selectedDelivery.ongkir : 0);
   const exceedsCarry = totalUnits > selectedDelivery.maxUnits;
   const canPay = totalUnits > 0 && !exceedsCarry && money >= grandTotal;
@@ -270,21 +319,25 @@ export const PasarShopModal: React.FC<PasarShopModalProps> = ({
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {DELIVERY_OPTIONS.map((d) => {
-              const active = deliveryId === d.id;
+              const courierOpen = isDeliveryOpen(d);
+              const active = selectedDelivery.id === d.id;
               return (
                 <button
                   key={d.id}
+                  disabled={!courierOpen}
                   onClick={() => setDeliveryId(d.id)}
                   className={`p-2.5 rounded-lg border text-left transition-all ${
-                    active
+                    !courierOpen
+                      ? 'bg-slate-900/40 border-slate-800 text-slate-500 opacity-55 cursor-not-allowed'
+                      : active
                       ? 'bg-amber-400/20 border-amber-400 text-amber-100'
                       : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
                   }`}
                 >
-                  <div className="flex items-center justify-between text-xs font-bold">
+                  <div className="flex items-center justify-between text-xs font-bold gap-1">
                     <span>{d.name}</span>
                     <span className="font-mono-num text-amber-300">
-                      {d.ongkir === 0 ? 'Gratis' : formatRupiah(d.ongkir)}
+                      {!courierOpen ? 'Istirahat' : d.ongkir === 0 ? 'Gratis' : formatRupiah(d.ongkir)}
                     </span>
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1">{d.note}</div>

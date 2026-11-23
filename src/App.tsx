@@ -853,9 +853,11 @@ export default function App() {
     });
     setActiveModal(null);
     showToast(
-      `Arga naik ${vehicleName} (${formatRupiah(fare)}) dan tiba di ${
-        goingToPasar ? 'Pasar Tradisional Sunda' : 'Kampung Sukamaju'
-      }.`
+      fare === 0
+        ? `Arga berjalan kaki pulang dan tiba di ${goingToPasar ? 'Pasar Tradisional Sunda' : 'Kampung Sukamaju'}.`
+        : `Arga naik ${vehicleName} (${formatRupiah(fare)}) dan tiba di ${
+            goingToPasar ? 'Pasar Tradisional Sunda' : 'Kampung Sukamaju'
+          }.`
     );
   };
 
@@ -1590,6 +1592,7 @@ export default function App() {
         <TransportPasarModal
           isAtPasar={gameState.scene === 'pasar'}
           money={gameState.money}
+          minutesOfDay={gameState.minutesOfDay}
           onSelectRide={handleSelectPasarRide}
           onClose={() => setActiveModal(null)}
         />
@@ -1598,6 +1601,7 @@ export default function App() {
       {activeModal === 'PASAR_SHOP' && (
         <PasarShopModal
           money={gameState.money}
+          minutesOfDay={gameState.minutesOfDay}
           inventory={gameState.inventory}
           season={gameState.season}
           weather={gameState.weather}

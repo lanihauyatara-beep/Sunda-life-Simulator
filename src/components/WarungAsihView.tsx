@@ -18,6 +18,8 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
 }) => {
   const menuItems = ITEMS.filter((i) => i.category === 'ngopi');
   const [focusedIdx, setFocusedIdx] = useState(0);
+  const hour = gameState.minutesOfDay / 60;
+  const isWarungAsihOpen = hour >= 5 && hour < 22;
 
   useUiGamepadAction((btn) => {
     if (menuItems.length === 0) return;
@@ -25,7 +27,7 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
       setFocusedIdx((i) => (i + 1) % menuItems.length);
     } else if (btn === 'DPAD_LEFT' || btn === 'DPAD_UP') {
       setFocusedIdx((i) => (i + menuItems.length - 1) % menuItems.length);
-    } else if (btn === 'A') {
+    } else if (btn === 'A' && isWarungAsihOpen) {
       const target = menuItems[focusedIdx];
       if (target && gameState.money >= target.retailPrice && gameState.energy < 100) {
         onConsumeMenu(target.id);
@@ -58,17 +60,30 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
                 size="md"
               />
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-display text-xl font-bold text-amber-200 flex items-center gap-2">
                     <Coffee className="w-5 h-5 text-amber-400" />
                     Warung Asih · Tempat Ngopi &amp; Makan
                   </h2>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                      isWarungAsihOpen
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-400/50'
+                    }`}
+                  >
+                    {isWarungAsihOpen ? 'Buka · 05.00–22.00 WIB' : 'Tutup Istirahat · Buka 05.00 WIB'}
+                  </span>
                 </div>
                 <p className="text-xs italic text-amber-100 mt-1">
-                  "Mangga linggih Arga! Kopi hideung, surabi haneut, sareng sangu tutug oncomna tos sayogi."
+                  {isWarungAsihOpen
+                    ? '"Mangga linggih Arga! Kopi hideung, surabi haneut, sareng sangu tutug oncomna tos sayogi."'
+                    : '"Punten Arga, tos waktosna istirahat wengi. Warung Asih buka deui énjing tabuh 05.00 WIB!"'}
                 </p>
                 <p className="text-[11px] text-emerald-300 mt-0.5">
-                  Terjemahan: "Silakan duduk Arga! Kopi hitam, surabi hangat, dan nasi tutug oncomnya sudah tersedia."
+                  {isWarungAsihOpen
+                    ? 'Terjemahan: "Silakan duduk Arga! Kopi hitam, surabi hangat, dan nasi tutug oncomnya sudah tersedia."'
+                    : 'Terjemahan: "Maaf Arga, sudah waktunya istirahat malam. Warung Asih buka lagi besok pukul 05.00 WIB!"'}
                 </p>
               </div>
             </div>
@@ -87,7 +102,7 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
           {/* Menu Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
             {menuItems.map((menu, idx) => {
-              const disabled = gameState.money < menu.retailPrice || gameState.energy >= 100;
+              const disabled = !isWarungAsihOpen || gameState.money < menu.retailPrice || gameState.energy >= 100;
               const isFocused = focusedIdx === idx;
               return (
                 <div
@@ -128,7 +143,9 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
                     >
                       <Utensils className="w-3.5 h-3.5" />
                       <span>
-                        {gameState.energy >= 100
+                        {!isWarungAsihOpen
+                          ? 'Warung Tutup'
+                          : gameState.energy >= 100
                           ? 'Energi Penuh'
                           : gameState.money < menu.retailPrice
                           ? 'Uang Kurang'
