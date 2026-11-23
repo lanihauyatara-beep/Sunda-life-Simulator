@@ -88,6 +88,40 @@
   will-change: transform, opacity;
 }
 
+@keyframes sundaCloudDrift {
+  0% {
+    transform: translate3d(-3.5%, -1.5%, 0) scale(1.06);
+  }
+  50% {
+    transform: translate3d(3.5%, 1.5%, 0) scale(1.1);
+  }
+  100% {
+    transform: translate3d(-3.5%, -1.5%, 0) scale(1.06);
+  }
+}
+
+.sunda-cloud-drift {
+  animation: sundaCloudDrift 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes sundaSunShimmer {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.92;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+}
+
+.sunda-sun-shimmer {
+  transform-origin: 86% 10%;
+  animation: sundaSunShimmer 7s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
 /* Realistic Character Walking & Idle Animations */
 @keyframes sundaWalkBob {
   0%, 100% {

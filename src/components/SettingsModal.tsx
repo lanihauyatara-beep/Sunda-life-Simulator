@@ -1,4 +1,5 @@
 import React from 'react';
+import { LogOut } from 'lucide-react';
 import { GameSettings } from '../types/game';
 import { PWAInstallButton } from './PWAAndOrientationUI';
 
@@ -6,6 +7,7 @@ interface SettingsModalProps {
   settings: GameSettings;
   onUpdate: (next: GameSettings) => void;
   onReplayTutorial: () => void;
+  onExitGame?: () => void;
   onClose: () => void;
 }
 
@@ -13,6 +15,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   onUpdate,
   onReplayTutorial,
+  onExitGame,
   onClose,
 }) => {
   return (
@@ -175,12 +178,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={onClose}
-          className="w-full py-3.5 rounded-xl bg-gradient-to-b from-amber-300 to-amber-400 text-slate-950 font-display font-bold text-lg shadow-lg hover:brightness-105 transition-all"
-        >
-          Simpan dan Kembali [B]
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          {onExitGame && (
+            <button
+              onClick={onExitGame}
+              className="sm:w-auto px-5 py-3.5 rounded-xl bg-rose-950/90 hover:bg-rose-900 border-2 border-rose-500/70 text-rose-100 font-display font-bold text-base shadow-lg transition-all flex items-center justify-center gap-2"
+            >
+              <LogOut className="w-4 h-4 text-rose-300" />
+              <span>Keluar ke Halaman Awal</span>
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="flex-1 py-3.5 rounded-xl bg-gradient-to-b from-amber-300 to-amber-400 text-slate-950 font-display font-bold text-lg shadow-lg hover:brightness-105 transition-all"
+          >
+            Simpan dan Kembali [B]
+          </button>
+        </div>
       </div>
     </div>
   );

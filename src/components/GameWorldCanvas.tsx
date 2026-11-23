@@ -288,6 +288,41 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
   const onTriggerHotspotRef = useRef(onTriggerHotspot);
   onTriggerHotspotRef.current = onTriggerHotspot;
 
+  // Smooth weather fade-in / fade-out state for rain streaks and atmospheric transition shimmer
+  const isOutdoorRain = !scene.isIndoor && (weather === 'hujan' || weather === 'gerimis');
+  const [rainMounted, setRainMounted] = useState(isOutdoorRain);
+  const [rainVisible, setRainVisible] = useState(isOutdoorRain);
+  const prevWeatherRef = useRef<WeatherCondition>(weather);
+  const [weatherShiftVeilOpacity, setWeatherShiftVeilOpacity] = useState(0);
+
+  useEffect(() => {
+    if (isOutdoorRain) {
+      setRainMounted(true);
+      const rafId = window.requestAnimationFrame(() => {
+        setRainVisible(true);
+      });
+      return () => window.cancelAnimationFrame(rafId);
+    }
+
+    setRainVisible(false);
+    const unmountTimer = window.setTimeout(() => {
+      setRainMounted(false);
+    }, 1950);
+    return () => window.clearTimeout(unmountTimer);
+  }, [isOutdoorRain]);
+
+  useEffect(() => {
+    if (prevWeatherRef.current === weather) return;
+    prevWeatherRef.current = weather;
+    if (scene.isIndoor) return;
+
+    setWeatherShiftVeilOpacity(0.24);
+    const fadeTimer = window.setTimeout(() => {
+      setWeatherShiftVeilOpacity(0);
+    }, 140);
+    return () => window.clearTimeout(fadeTimer);
+  }, [weather, scene.isIndoor]);
+
   // Sync incoming playerPos ONLY when scene changes or teleported far from local posRef
   useEffect(() => {
     const distFromLocal = Math.hypot(playerPos.x - posRef.current.x, playerPos.y - posRef.current.y);
@@ -618,85 +653,130 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
     }
   }, [nearestKey, scene.id]);
 
-  // Dynamic Time-of-Day + Weather lighting:
+  // Dynamic Time-of-Day + Layered Fading Weather lighting:
   // - 10.00-15.30 (jam 12 terik): cerah menyala hangat (atau mendung saat musim hujan)
   // - 17.45-18.29 (jam 18.00 agak gelap): senja temaram, lampu mulai bersiap
   // - >= 18.30 - 04.59 (jam 18.30 gelap & lampu sudah menyala): malam gelap + lampu jalan/rumah menyala hangat
+  // Weather layers (sunny glare, cloudy overcast veil, drizzle/rain tint & streaks) stay mounted with
+  // constant CSS backgrounds and cross-fade smoothly via CSS opacity transitions (1800ms) instead of swapping gradients.
   const hour = minutesOfDay / 60;
-  const isRainyNow = !scene.isIndoor && (weather === 'hujan' || weather === 'gerimis');
-  const isCloudyNow = !scene.isIndoor && weather === 'mendung';
-  const isTerikDay = !scene.isIndoor && weather === 'terik' && hour >= 9.5 && hour < 15.8;
+  const isDaytimeOutdoor = !scene.isIndoor && hour >= 6.0 && hour < 17.65;
+  const isNightTime = hour >= 18.5 || hour < 4.75;
+  const isDuskTime = hour >= 17.65 && hour < 18.5;
+  const daylightFactor = isNightTime ? 0.42 : isDuskTime ? 0.72 : 1;
 
-  let backdropBrightness = 1;
-  let backdropSaturate = 1;
+  // Base time-of-day brightness & saturation (weather adjustments applied smoothly on top)
+  let baseBrightness = 1;
+  let baseSaturate = 1;
   let timeTintStyle: React.CSSProperties = { background: 'transparent' };
 
   if (hour >= 18.5 || hour < 4.75) {
     // >= 18.30 WIB: Malam gelap dan lampu kampung mulai menyala terang
-    backdropBrightness = 0.48;
-    backdropSaturate = 0.85;
+    baseBrightness = 0.48;
+    baseSaturate = 0.85;
     timeTintStyle = {
       background:
         'linear-gradient(180deg, rgba(2,6,23,0.68) 0%, rgba(15,23,42,0.52) 55%, rgba(2,6,23,0.62) 100%)',
     };
   } else if (hour >= 18.3 && hour < 18.5) {
     // 18.18 - 18.29 WIB: Transisi cepat ke gelap
-    backdropBrightness = 0.6;
-    backdropSaturate = 0.9;
+    baseBrightness = 0.6;
+    baseSaturate = 0.9;
     timeTintStyle = {
       background:
         'linear-gradient(180deg, rgba(15,23,42,0.56) 0%, rgba(49,46,129,0.34) 50%, rgba(15,23,42,0.48) 100%)',
     };
   } else if (hour >= 17.65 && hour < 18.3) {
     // Sekitar jam 18.00 WIB: Agak gelap / senja Maghrib
-    backdropBrightness = 0.74;
-    backdropSaturate = 0.98;
+    baseBrightness = 0.74;
+    baseSaturate = 0.98;
     timeTintStyle = {
       background:
         'linear-gradient(180deg, rgba(30,27,75,0.44) 0%, rgba(180,83,9,0.24) 55%, rgba(15,23,42,0.36) 100%)',
     };
   } else if (hour >= 16.0 && hour < 17.65) {
     // Sore keemasan menjelang senja
-    backdropBrightness = isRainyNow ? 0.78 : 0.93;
-    backdropSaturate = isRainyNow ? 0.86 : 1.06;
-    timeTintStyle = isRainyNow
-      ? { background: 'rgba(15,23,42,0.28)' }
-      : {
-          background:
-            'linear-gradient(180deg, rgba(245,158,11,0.16) 0%, rgba(217,119,6,0.08) 100%)',
-        };
+    baseBrightness = 0.93;
+    baseSaturate = 1.06;
+    timeTintStyle = {
+      background:
+        'linear-gradient(180deg, rgba(245,158,11,0.16) 0%, rgba(217,119,6,0.08) 100%)',
+    };
   } else if (hour >= 4.75 && hour < 6.25) {
     // Subuh / fajar menyingsing
-    backdropBrightness = 0.78;
-    backdropSaturate = 0.92;
+    baseBrightness = 0.78;
+    baseSaturate = 0.92;
     timeTintStyle = {
       background:
         'linear-gradient(180deg, rgba(30,41,59,0.38) 0%, rgba(251,191,36,0.12) 100%)',
     };
-  } else {
-    // Pagi - Siang (termasuk jam 12 siang)
-    if (isRainyNow) {
-      backdropBrightness = weather === 'hujan' ? 0.76 : 0.85;
-      backdropSaturate = 0.8;
-      timeTintStyle = {
-        background:
-          weather === 'hujan'
-            ? 'linear-gradient(180deg, rgba(15,23,42,0.42) 0%, rgba(30,58,138,0.24) 100%)'
-            : 'linear-gradient(180deg, rgba(30,41,59,0.28) 0%, rgba(51,65,85,0.16) 100%)',
-      };
-    } else if (isCloudyNow) {
-      backdropBrightness = 0.9;
-      backdropSaturate = 0.88;
-      timeTintStyle = { background: 'rgba(51,65,85,0.20)' };
-    } else if (isTerikDay) {
-      backdropBrightness = 1.09;
-      backdropSaturate = 1.1;
-      timeTintStyle = {
-        background:
-          'radial-gradient(circle at 86% 10%, rgba(254,240,138,0.34) 0%, rgba(251,191,36,0.12) 34%, transparent 70%)',
-      };
-    }
   }
+
+  // Smooth weather multipliers for scene brightness/saturation
+  const weatherBrightnessMult = scene.isIndoor
+    ? 1
+    : weather === 'hujan'
+    ? 0.76
+    : weather === 'gerimis'
+    ? 0.85
+    : weather === 'mendung'
+    ? 0.9
+    : weather === 'terik' && isDaytimeOutdoor
+    ? 1.09
+    : 1;
+
+  const weatherSaturateMult = scene.isIndoor
+    ? 1
+    : weather === 'hujan' || weather === 'gerimis'
+    ? 0.82
+    : weather === 'mendung'
+    ? 0.88
+    : weather === 'terik' && isDaytimeOutdoor
+    ? 1.1
+    : 1;
+
+  const backdropBrightness = Number((baseBrightness * weatherBrightnessMult).toFixed(3));
+  const backdropSaturate = Number((baseSaturate * weatherSaturateMult).toFixed(3));
+
+  // Independent always-mounted weather overlay opacities (smoothly transitioned over 1800ms)
+  const sunOverlayOpacity = !isDaytimeOutdoor
+    ? 0
+    : weather === 'terik'
+    ? hour >= 9.5 && hour < 15.8
+      ? 1
+      : 0.7
+    : weather === 'cerah'
+    ? 0.42
+    : 0;
+
+  const cloudOverlayOpacity = scene.isIndoor
+    ? 0
+    : weather === 'hujan'
+    ? 1 * daylightFactor
+    : weather === 'gerimis'
+    ? 0.86 * daylightFactor
+    : weather === 'mendung'
+    ? 0.74 * daylightFactor
+    : 0;
+
+  const rainAtmosphereOpacity = scene.isIndoor
+    ? 0
+    : weather === 'hujan'
+    ? isNightTime
+      ? 0.72
+      : 1
+    : weather === 'gerimis'
+    ? isNightTime
+      ? 0.35
+      : 0.5
+    : 0;
+
+  const drizzleLayerOpacity =
+    rainVisible && isOutdoorRain ? (weather === 'hujan' ? 0.95 : 0.65) : 0;
+  const heavyRainLayerOpacity =
+    rainVisible && !scene.isIndoor && weather === 'hujan' ? 1 : 0;
+  const drizzleSplitIdx = batterySaver ? 8 : 16;
+  const totalDropsCap = batterySaver ? 16 : 34;
 
   // Lampu jalan & rumah menyala penuh saat >= 18.30 (18.5 jam), redup transisi saat 18.24-18.30
   const lightsOpacity =
@@ -708,16 +788,6 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
       ? 0.4
       : 0;
   const lightPoints = !scene.isIndoor && lightsOpacity > 0 ? SCENE_LIGHT_POINTS[scene.id] ?? [] : [];
-  const rainDropsCount =
-    weather === 'hujan'
-      ? batterySaver
-        ? 16
-        : 34
-      : weather === 'gerimis'
-      ? batterySaver
-        ? 8
-        : 16
-      : 0;
 
   const operatingRoadVehicles = getOperatingVehicles(scene.allowedVehicles, minutesOfDay);
   const nearRoad =
@@ -766,7 +836,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
       onClick={handleStageClick}
       className="relative isolate z-0 w-full h-full overflow-hidden bg-slate-950 cursor-crosshair select-none"
     >
-      {/* Background Isometric Diorama with dynamic brightness/saturation for Terik / Senja / Malam */}
+      {/* Background Isometric Diorama with smooth brightness/saturation transitions */}
       <img
         src={scene.bgImage}
         alt={scene.name}
@@ -775,14 +845,79 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
           objectPosition: scene.bgPosition ?? '50% 50%',
           filter: `brightness(${backdropBrightness}) saturate(${backdropSaturate})`,
         }}
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-all duration-1000"
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-[filter] duration-[1800ms] ease-in-out"
       />
 
-      {/* Atmospheric Time-of-Day & Weather Tint Layer */}
+      {/* Time-of-Day Base Atmospheric Tint Layer */}
       <div
         style={timeTintStyle}
-        className="absolute inset-0 pointer-events-none transition-all duration-1000"
+        className="absolute inset-0 pointer-events-none transition-all duration-[1800ms] ease-in-out"
       />
+
+      {/* Sunny / Terik Warm Sunbeam Overlay (fades smoothly in/out via opacity) */}
+      <div
+        style={{ opacity: sunOverlayOpacity }}
+        className="absolute inset-0 pointer-events-none transition-opacity duration-[1800ms] ease-in-out"
+      >
+        <div
+          style={{
+            background:
+              'radial-gradient(circle at 86% 10%, rgba(254,240,138,0.42) 0%, rgba(251,191,36,0.16) 35%, rgba(245,158,11,0.04) 56%, transparent 74%)',
+          }}
+          className={`absolute inset-0 ${sunOverlayOpacity > 0.5 && !batterySaver ? 'sunda-sun-shimmer' : ''}`}
+        />
+      </div>
+
+      {/* Cloudy / Mendung Overcast & Drifting Cloud-Shadow Veil (fades smoothly via opacity) */}
+      <div
+        style={{ opacity: cloudOverlayOpacity }}
+        className="absolute inset-0 pointer-events-none overflow-hidden transition-opacity duration-[1800ms] ease-in-out"
+      >
+        <div
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(51,65,85,0.42) 0%, rgba(71,85,105,0.26) 54%, rgba(30,41,59,0.18) 100%)',
+          }}
+          className="absolute inset-0"
+        />
+        {!batterySaver && (
+          <div
+            style={{
+              background:
+                'radial-gradient(ellipse 65% 42% at 24% 20%, rgba(226,232,240,0.14) 0%, transparent 70%), radial-gradient(ellipse 58% 38% at 76% 28%, rgba(30,41,59,0.2) 0%, transparent 72%)',
+            }}
+            className="absolute -inset-6 sunda-cloud-drift"
+          />
+        )}
+      </div>
+
+      {/* Rain & Storm Cool Atmospheric Tint + Horizon Mist (fades smoothly via opacity) */}
+      <div
+        style={{ opacity: rainAtmosphereOpacity }}
+        className="absolute inset-0 pointer-events-none transition-opacity duration-[1800ms] ease-in-out"
+      >
+        <div
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(15,23,42,0.44) 0%, rgba(30,58,138,0.22) 55%, rgba(148,163,184,0.16) 100%)',
+          }}
+          className="absolute inset-0"
+        />
+      </div>
+
+      {/* Brief Soft Atmospheric Transition Veil when weather shifts */}
+      {!scene.isIndoor && (
+        <div
+          style={{
+            opacity: weatherShiftVeilOpacity,
+            background:
+              weather === 'terik' || weather === 'cerah'
+                ? 'radial-gradient(circle at 78% 18%, rgba(254,243,199,0.45) 0%, rgba(255,255,255,0.18) 60%, transparent 100%)'
+                : 'linear-gradient(180deg, rgba(148,163,184,0.34) 0%, rgba(71,85,105,0.22) 100%)',
+          }}
+          className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-[1500ms] ease-in-out"
+        />
+      )}
 
       {/* Village Street & House Lamps (Automatically illuminate starting 18.30 WIB until dawn) */}
       {lightPoints.length > 0 && (
@@ -809,24 +944,45 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         </div>
       )}
 
-      {/* Animated Rain Streaks during Rainy Spells (non-continuous rain in Musim Hujan) */}
-      {rainDropsCount > 0 && (
+      {/* Two-Stage Smoothly Fading Rain Streaks (Gerimis fades into Hujan, and fades out gracefully on clearing) */}
+      {rainMounted && (
         <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden">
-          {RAIN_DROPS.slice(0, rainDropsCount).map((drop) => (
-            <span
-              key={drop.id}
-              style={{
-                left: `${drop.leftPct}%`,
-                top: '-10%',
-                height: `${drop.heightPx}px`,
-                animationDelay: `${drop.delaySec}s`,
-                animationDuration: `${drop.durationSec}s`,
-              }}
-              className={`sunda-rain-drop absolute w-[1.5px] rounded-full ${
-                weather === 'hujan' ? 'bg-sky-200/75' : 'bg-sky-200/45'
-              }`}
-            />
-          ))}
+          <div
+            style={{ opacity: drizzleLayerOpacity }}
+            className="absolute inset-0 transition-opacity duration-[1800ms] ease-in-out"
+          >
+            {RAIN_DROPS.slice(0, drizzleSplitIdx).map((drop) => (
+              <span
+                key={drop.id}
+                style={{
+                  left: `${drop.leftPct}%`,
+                  top: '-10%',
+                  height: `${drop.heightPx}px`,
+                  animationDelay: `${drop.delaySec}s`,
+                  animationDuration: `${drop.durationSec}s`,
+                }}
+                className="sunda-rain-drop absolute w-[1.5px] rounded-full bg-sky-200/65"
+              />
+            ))}
+          </div>
+          <div
+            style={{ opacity: heavyRainLayerOpacity }}
+            className="absolute inset-0 transition-opacity duration-[1800ms] ease-in-out"
+          >
+            {RAIN_DROPS.slice(drizzleSplitIdx, totalDropsCap).map((drop) => (
+              <span
+                key={drop.id}
+                style={{
+                  left: `${drop.leftPct}%`,
+                  top: '-10%',
+                  height: `${drop.heightPx + 3}px`,
+                  animationDelay: `${drop.delaySec}s`,
+                  animationDuration: `${Math.max(0.45, drop.durationSec - 0.08)}s`,
+                }}
+                className="sunda-rain-drop absolute w-[1.5px] rounded-full bg-sky-100/80"
+              />
+            ))}
+          </div>
         </div>
       )}
 

@@ -3,6 +3,7 @@ import { CheckCircle2, Sparkles } from 'lucide-react';
 import { SideJobDef } from '../types/game';
 import { formatRupiah } from '../data/gameData';
 import { useUiGamepadAction } from '../hooks/useGamepad';
+import { soundEngine } from '../utils/audio';
 
 interface FishingModalProps {
   energy: number;
@@ -37,15 +38,19 @@ export const FishingModal: React.FC<FishingModalProps> = ({ energy, onCatchFish,
   const handleAction = () => {
     if (phase === 'idle' || phase === 'result') {
       if (energy < 5) {
+        soundEngine.error();
         setMessage('Energi Arga terlalu rendah! Ngopi atau istirahat dulu.');
         return;
       }
+      soundEngine.splashWater();
       setPhase('waiting');
       setMessage('Menunggu ikan menyambar umpan...');
     } else if (phase === 'waiting') {
+      soundEngine.splashWater();
       setPhase('result');
       setMessage('Terlalu cepat menarik kail! Ikannya kabur.');
     } else if (phase === 'biting') {
+      soundEngine.splashWater();
       const isLegend = Math.random() < 0.22;
       const fishId = isLegend ? 'ikan_dewa' : 'ikan_mas';
       setCaughtCount((c) => c + 1);
@@ -143,6 +148,7 @@ export const FruitPickingModal: React.FC<FruitPickingModalProps> = ({
   const pickedCount = fruits.filter((f) => f.picked).length;
 
   const handlePick = (id: string) => {
+    soundEngine.rustleLeaves();
     setFruits((prev) => prev.map((f) => (f.id === id ? { ...f, picked: true } : f)));
   };
 

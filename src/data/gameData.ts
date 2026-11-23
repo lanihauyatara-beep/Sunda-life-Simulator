@@ -13,6 +13,8 @@ import {
   TraditionDef,
   VehicleType,
   WeatherCondition,
+  WeatherForecastDay,
+  FinancialTransaction,
 } from '../types/game';
 
 export const ASSETS = {
@@ -170,6 +172,17 @@ export function formatRupiah(amount: number): string {
   return amount < 0 ? `-Rp ${formatted}` : `Rp ${formatted}`;
 }
 
+export function appendTransaction(
+  existing: FinancialTransaction[] | undefined,
+  entry: Omit<FinancialTransaction, 'id'>
+): FinancialTransaction[] {
+  const nextItem: FinancialTransaction = {
+    ...entry,
+    id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+  };
+  return [nextItem, ...(existing ?? [])].slice(0, 10);
+}
+
 export function formatGameTime(minutesOfDay: number): string {
   const m = ((Math.floor(minutesOfDay) % 1440) + 1440) % 1440;
   const hh = Math.floor(m / 60)
@@ -298,6 +311,113 @@ export function rollInitialSeasonAndWeather(minutesOfDay: number): {
     season,
     weather: rolled.weather,
     weatherRemainingMin: rolled.durationMin,
+  };
+}
+
+export function generateForecastDay(
+  day: number,
+  prevSeason: SeasonType,
+  forcedSeason?: SeasonType
+): WeatherForecastDay {
+  const nextSeason: SeasonType =
+    forcedSeason ??
+    (Math.random() < (prevSeason === 'hujan' ? 0.28 : 0.25)
+      ? prevSeason === 'hujan'
+        ? 'kemarau'
+        : 'hujan'
+      : prevSeason);
+
+  if (nextSeason === 'hujan') {
+    const rM = Math.random();
+    const rA = Math.random();
+    const rE = Math.random();
+    const morning: WeatherCondition = rM < 0.48 ? 'cerah' : rM < 0.82 ? 'mendung' : 'gerimis';
+    const afternoon: WeatherCondition = rA < 0.44 ? 'hujan' : rA < 0.76 ? 'gerimis' : 'mendung';
+    const evening: WeatherCondition = rE < 0.34 ? 'hujan' : rE < 0.68 ? 'gerimis' : rE < 0.9 ? 'mendung' : 'cerah';
+    const rainChancePct = 58 + ((day * 11 + Math.floor(Math.random() * 22)) % 33);
+    return { day, season: nextSeason, morning, afternoon, evening, rainChancePct };
+  }
+
+  const rM = Math.random();
+  const rA = Math.random();
+  const rE = Math.random();
+  const morning: WeatherCondition = rM < 0.74 ? 'cerah' : rM < 0.9 ? 'terik' : 'mendung';
+  const afternoon: WeatherCondition = rA < 0.76 ? 'terik' : rA < 0.94 ? 'cerah' : 'mendung';
+  const evening: WeatherCondition = rE < 0.76 ? 'cerah' : 'mendung';
+  const rainChancePct = 5 + ((day * 7 + Math.floor(Math.random() * 12)) % 18);
+  return { day, season: nextSeason, morning, afternoon, evening, rainChancePct };
+}
+
+/**
+ * Keeps a consistent 4-day rolling weather window:
+ * index 0 = today (currentDay), index 1..3 = upcoming 3-day forecast (Besok, Lusa, Hari +3).
+ */
+export function ensureWeatherForecast(
+  currentDay: number,
+  currentSeason: SeasonType,
+  currentWeather: WeatherCondition,
+  existing?: WeatherForecastDay[]
+): WeatherForecastDay[] {
+  const byDay = new Map<number, WeatherForecastDay>();
+  if (Array.isArray(existing)) {
+    for (const entry of existing) {
+      if (entry && typeof entry.day === 'number') {
+        byDay.set(entry.day, entry);
+      }
+    }
+  }
+
+  const result: WeatherForecastDay[] = [];
+  let prevSeason = currentSeason;
+  for (let offset = 0; offset <= 3; offset++) {
+    const targetDay = currentDay + offset;
+    const saved = byDay.get(targetDay);
+    if (saved && (offset > 0 || saved.season === currentSeason)) {
+      result.push(saved);
+      prevSeason = saved.season;
+    } else {
+      const generated = generateForecastDay(
+        targetDay,
+        prevSeason,
+        offset === 0 ? currentSeason : undefined
+      );
+      if (offset === 0) {
+        generated.morning = currentWeather;
+      }
+      result.push(generated);
+      prevSeason = generated.season;
+    }
+  }
+  return result;
+}
+
+export function getForecastPlanningAdvice(fc: WeatherForecastDay): {
+  stockTip: string;
+  outdoorTip: string;
+} {
+  const hasAfternoonRain = fc.afternoon === 'hujan' || fc.afternoon === 'gerimis';
+  const hasMorningRain = fc.morning === 'hujan' || fc.morning === 'gerimis';
+
+  if (fc.season === 'hujan') {
+    return {
+      stockTip: 'Kulakan Jas Hujan, Payung Lipat, Bandrek & Bajigur di Pasar sebelum hujan turun.',
+      outdoorTip: hasMorningRain
+        ? 'Pagi berpotensi gerimis—utamakan buka warung & naik Angkot/Delman saat ke Pasar.'
+        : hasAfternoonRain
+        ? 'Manfaatkan pagi hari untuk mancing di Area Air, petik buah, atau belanja Pasar.'
+        : 'Langit berawan sejuk; aman untuk keliling kampung & kerja sampingan.',
+    };
+  }
+
+  return {
+    stockTip:
+      fc.afternoon === 'terik'
+        ? 'Stok Es Cendol, Teh Manis & Caping Bambu—siang terik bikin minuman dingin laris!'
+        : 'Stok kebutuhan pokok (Beras, Minyak, Gorengan) tetap stabil sepanjang hari.',
+    outdoorTip:
+      fc.afternoon === 'terik'
+        ? 'Terik siang cukup terik: ke Pasar atau kebun buah lebih nyaman pagi (06.00–10.00 WIB).'
+        : 'Cuaca kemarau sejuk mendukung memancing, bertani di sawah, & kerja sampingan.',
   };
 }
 
@@ -2420,6 +2540,8 @@ export function createInitialGameState(slotId = 1): GameState {
     season: initialWeather.season,
     weather: initialWeather.weather,
     weatherRemainingMin: initialWeather.weatherRemainingMin,
+    weatherForecast: ensureWeatherForecast(1, initialWeather.season, initialWeather.weather),
+    transactions: [],
     lastSavedAt: new Date().toISOString(),
   };
 }

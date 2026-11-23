@@ -10,15 +10,27 @@ import {
   Wallet,
   Gamepad2,
   Trophy,
+  CloudSun,
+  Umbrella,
+  ShoppingBag,
+  Compass,
+  ReceiptText,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from 'lucide-react';
 import {
   PRAYER_SCHEDULE,
   RANK_TIER_DEFS,
   SCENES,
+  SEASON_META,
   TRADITIONS,
+  WEATHER_META,
   computeEffectiveActivityPoints,
+  ensureWeatherForecast,
+  formatGameDate,
   formatGameTime,
   formatRupiah,
+  getForecastPlanningAdvice,
   getPlayerRankInfo,
 } from '../data/gameData';
 import {
@@ -463,11 +475,12 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
   onOpenTraditions,
   onClose,
 }) => {
-  const [tab, setTab] = useState<'keuangan' | 'ulasan' | 'tradisi' | 'kontroler'>('keuangan');
+  const [tab, setTab] = useState<'keuangan' | 'cuaca' | 'ulasan' | 'tradisi' | 'kontroler'>('keuangan');
 
   useUiGamepadAction((btn) => {
-    const order: ('keuangan' | 'ulasan' | 'tradisi' | 'kontroler')[] = [
+    const order: ('keuangan' | 'cuaca' | 'ulasan' | 'tradisi' | 'kontroler')[] = [
       'keuangan',
+      'cuaca',
       'ulasan',
       'tradisi',
       'kontroler',
@@ -492,6 +505,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
           <div className="flex flex-wrap gap-1.5">
             {[
               { id: 'keuangan' as const, label: 'Keuangan' },
+              { id: 'cuaca' as const, label: 'Cuaca 3 Hari' },
               { id: 'ulasan' as const, label: 'Ulasan' },
               { id: 'tradisi' as const, label: 'Adat & Sholat' },
               { id: 'kontroler' as const, label: 'ROG Ally' },
@@ -626,6 +640,246 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* 10 Transaksi & Kejadian Terakhir */}
+                {(() => {
+                  const recentTx = (gameState.transactions ?? []).slice(0, 10);
+                  const totalIn = recentTx
+                    .filter((tx) => tx.type === 'income')
+                    .reduce((acc, tx) => acc + tx.amount, 0);
+                  const totalOut = recentTx
+                    .filter((tx) => tx.type === 'expense')
+                    .reduce((acc, tx) => acc + tx.amount, 0);
+
+                  return (
+                    <div className="bg-slate-950 border border-amber-400/40 rounded-xl p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                        <div className="flex items-center gap-1.5 text-sm font-bold text-amber-300">
+                          <ReceiptText className="w-4 h-4 text-amber-400" />
+                          <span>10 Transaksi &amp; Kejadian Terakhir</span>
+                        </div>
+                        {recentTx.length > 0 && (
+                          <div className="flex items-center gap-2 text-[10px] font-mono-num font-bold">
+                            <span className="text-emerald-300">+{formatRupiah(totalIn)}</span>
+                            <span className="text-slate-600">·</span>
+                            <span className="text-rose-300">-{formatRupiah(totalOut)}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {recentTx.length === 0 ? (
+                        <p className="text-xs text-slate-400">
+                          Belum ada riwayat transaksi. Mulai buka warung, belanja ke pasar, atau ambil kerja sampingan!
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                          {recentTx.map((tx) => {
+                            const isIncome = tx.type === 'income';
+                            return (
+                              <div
+                                key={tx.id}
+                                className="flex items-center justify-between gap-2.5 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-2"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
+                                      isIncome
+                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                    }`}
+                                  >
+                                    {isIncome ? (
+                                      <ArrowDownLeft className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <ArrowUpRight className="w-3.5 h-3.5" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-xs font-bold text-slate-100 truncate">
+                                      {tx.title}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 truncate">
+                                      Hari {tx.day} · {formatGameTime(tx.minutesOfDay)} WIB
+                                      {tx.detail ? ` · ${tx.detail}` : ''}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div
+                                  className={`font-mono-num text-xs font-bold shrink-0 ${
+                                    isIncome ? 'text-emerald-300' : 'text-rose-300'
+                                  }`}
+                                >
+                                  {isIncome ? '+' : '-'}
+                                  {formatRupiah(tx.amount)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            );
+          })()}
+
+          {tab === 'cuaca' && (() => {
+            const rolling = ensureWeatherForecast(
+              gameState.day,
+              gameState.season,
+              gameState.weather,
+              gameState.weatherForecast
+            );
+            const upcoming3Days = rolling.slice(1, 4);
+            const liveMeta = WEATHER_META[gameState.weather];
+            const liveSeason = SEASON_META[gameState.season];
+            const relativeNames = ['Besok', 'Lusa', '3 Hari Lagi'];
+
+            return (
+              <div className="space-y-3">
+                {/* Live Weather Header */}
+                <div className="bg-slate-950 border border-sky-400/50 rounded-xl p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <CloudSun className="w-5 h-5 text-sky-300" />
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                          BMKG Kampung Sukamaju · Sekarang ({formatGameDate(gameState.day)})
+                        </div>
+                        <div className="font-display text-base font-bold text-white flex items-center gap-1.5">
+                          <span>{liveMeta.emoji}</span>
+                          <span>{liveMeta.label}</span>
+                          <span className="text-xs font-normal text-slate-400">
+                            · {liveSeason.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right font-mono-num text-xs">
+                      <div className="text-amber-200 font-bold">
+                        {formatGameTime(gameState.minutesOfDay)} WIB
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Perubahan ~{Math.max(5, Math.round(gameState.weatherRemainingMin))} mnt lagi
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1.5">
+                    {liveSeason.advice}
+                  </p>
+                </div>
+
+                {/* 3-Day Upcoming Forecast */}
+                <div className="text-xs font-bold text-amber-300 uppercase tracking-wider px-0.5">
+                  Prakiraan 3 Hari Mendatang (Rencana Pasar & Kerja Luar)
+                </div>
+
+                <div className="space-y-2.5">
+                  {upcoming3Days.map((fc, idx) => {
+                    const prevDaySeason = idx === 0 ? gameState.season : upcoming3Days[idx - 1].season;
+                    const seasonChanged = fc.season !== prevDaySeason;
+                    const advice = getForecastPlanningAdvice(fc);
+                    const isRainSeason = fc.season === 'hujan';
+
+                    return (
+                      <div
+                        key={fc.day}
+                        className={`rounded-xl border p-3 ${
+                          isRainSeason
+                            ? 'bg-slate-950 border-cyan-500/45'
+                            : 'bg-slate-950 border-amber-400/45'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-200 font-bold text-[11px]">
+                              {relativeNames[idx]}
+                            </span>
+                            <span className="text-xs font-bold text-white">
+                              Hari ke-{fc.day} ({formatGameDate(fc.day)})
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {seasonChanged && (
+                              <span className="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-400/60 text-rose-200 text-[10px] font-bold">
+                                Pergantian Musim!
+                              </span>
+                            )}
+                            <span
+                              className={`px-2 py-0.5 rounded border text-[10px] font-bold ${
+                                isRainSeason
+                                  ? 'bg-cyan-950/70 border-cyan-400/60 text-cyan-200'
+                                  : 'bg-amber-950/60 border-amber-400/60 text-amber-200'
+                              }`}
+                            >
+                              {SEASON_META[fc.season].shortLabel}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Morning / Afternoon / Evening slots */}
+                        <div className="grid grid-cols-3 gap-1.5 mb-2">
+                          {[
+                            { slot: 'Pagi', w: fc.morning },
+                            { slot: 'Siang', w: fc.afternoon },
+                            { slot: 'Sore', w: fc.evening },
+                          ].map((part) => {
+                            const m = WEATHER_META[part.w];
+                            return (
+                              <div
+                                key={part.slot}
+                                className="bg-slate-900/90 border border-slate-800 rounded-lg px-2 py-1.5 text-center"
+                              >
+                                <div className="text-[10px] text-slate-400">{part.slot}</div>
+                                <div className="text-xs font-bold text-slate-100 mt-0.5">
+                                  {m.emoji} {m.label}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Rain Probability Bar */}
+                        <div className="flex items-center gap-2 mb-2 text-[11px]">
+                          <Umbrella className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                          <span className="text-slate-300 shrink-0">Peluang Hujan</span>
+                          <div className="flex-1 h-2 rounded-full bg-slate-900 border border-slate-800 overflow-hidden">
+                            <div
+                              style={{ width: `${fc.rainChancePct}%` }}
+                              className={`h-full ${
+                                fc.rainChancePct >= 55
+                                  ? 'bg-cyan-400'
+                                  : fc.rainChancePct >= 30
+                                  ? 'bg-sky-400'
+                                  : 'bg-amber-400'
+                              }`}
+                            />
+                          </div>
+                          <span className="font-mono-num font-bold text-cyan-200 w-9 text-right">
+                            {fc.rainChancePct}%
+                          </span>
+                        </div>
+
+                        {/* Planning Tips */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                          <div className="bg-slate-900/75 border border-slate-800 rounded-lg px-2.5 py-1.5 text-amber-100 flex items-start gap-1.5">
+                            <ShoppingBag className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                            <span>
+                              <strong className="text-amber-300">Stok Pasar:</strong> {advice.stockTip}
+                            </span>
+                          </div>
+                          <div className="bg-slate-900/75 border border-slate-800 rounded-lg px-2.5 py-1.5 text-emerald-100 flex items-start gap-1.5">
+                            <Compass className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                            <span>
+                              <strong className="text-emerald-300">Aktivitas Luar:</strong> {advice.outdoorTip}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );

@@ -42,6 +42,15 @@ export type SeasonType = 'kemarau' | 'hujan';
 
 export type WeatherCondition = 'terik' | 'cerah' | 'mendung' | 'gerimis' | 'hujan';
 
+export interface WeatherForecastDay {
+  day: number;
+  season: SeasonType;
+  morning: WeatherCondition;
+  afternoon: WeatherCondition;
+  evening: WeatherCondition;
+  rainChancePct: number;
+}
+
 export type PrayerName = 'Subuh' | 'Dzuhur' | 'Ashar' | 'Maghrib' | 'Isya';
 
 export type TraditionName =
@@ -253,6 +262,25 @@ export interface DebtRecord {
   dayCreated: number;
 }
 
+export interface FinancialTransaction {
+  id: string;
+  day: number;
+  minutesOfDay: number;
+  type: 'income' | 'expense';
+  category:
+    | 'warung'
+    | 'pasar'
+    | 'kerja'
+    | 'transport'
+    | 'konsumsi'
+    | 'tradisi'
+    | 'hutang'
+    | 'kesehatan';
+  title: string;
+  detail?: string;
+  amount: number;
+}
+
 export interface ReviewEntry {
   id: string;
   author: string;
@@ -303,6 +331,8 @@ export interface GameState {
   season: SeasonType;
   weather: WeatherCondition;
   weatherRemainingMin: number;
+  weatherForecast?: WeatherForecastDay[];
+  transactions?: FinancialTransaction[];
   lastSavedAt: string;
 }
 

@@ -27,13 +27,14 @@ import {
   TRADITIONS,
   VEHICLE_INFO,
   WEATHER_META,
+  appendTransaction,
   computeEffectiveActivityPoints,
   createInitialGameState,
+  ensureWeatherForecast,
   formatGameDate,
   formatGameTime,
   formatRupiah,
   getPlayerRankInfo,
-  pickRandomSeason,
   rollInitialSeasonAndWeather,
   rollNextWeather,
 } from './data/gameData';
@@ -126,6 +127,15 @@ function readAllSaveSlots(): SaveSlotSummary[] {
             typeof rawParsed.weatherRemainingMin === 'number'
               ? rawParsed.weatherRemainingMin
               : fallbackWeather.weatherRemainingMin,
+          weatherForecast: ensureWeatherForecast(
+            rawParsed.day ?? 1,
+            rawParsed.season ?? fallbackWeather.season,
+            rawParsed.weather ?? fallbackWeather.weather,
+            rawParsed.weatherForecast
+          ),
+          transactions: Array.isArray(rawParsed.transactions)
+            ? rawParsed.transactions.slice(0, 10)
+            : [],
         };
         list.push({
           slotId: i,
@@ -166,6 +176,7 @@ function advanceClockState(
   let nextSeason = prev.season ?? 'kemarau';
   let nextWeather = prev.weather ?? 'cerah';
   let nextWeatherRemaining = (prev.weatherRemainingMin ?? 90) - deltaMinutes;
+  let nextForecast = ensureWeatherForecast(prev.day, nextSeason, nextWeather, prev.weatherForecast);
   let weatherToast: string | null = null;
 
   if (daysPassed > 0) {
@@ -179,10 +190,15 @@ function advanceClockState(
       nextInjuryDays = Math.max(0, nextInjuryDays - daysPassed);
       if (nextInjuryDays <= 0) nextInjured = false;
     }
-    // Pergantian hari berpeluang mengganti musim (Kemarau <-> Musim Hujan) secara acak
-    if (Math.random() < 0.38) {
+    const targetForecast = nextForecast.find((f) => f.day === nextDay);
+    if (targetForecast) {
+      nextSeason = targetForecast.season;
+      nextWeather = targetForecast.morning;
+      nextWeatherRemaining = 90 + Math.floor(Math.random() * 60);
+    } else if (Math.random() < 0.38) {
       nextSeason = nextSeason === 'hujan' ? 'kemarau' : 'hujan';
     }
+    nextForecast = ensureWeatherForecast(nextDay, nextSeason, nextWeather, nextForecast);
   }
 
   // Cuaca berubah berkala (di Musim Hujan hujan tidak turun terus-menerus, bergantian hujan/gerimis & mendung/cerah)
@@ -230,6 +246,7 @@ function advanceClockState(
       season: nextSeason,
       weather: nextWeather,
       weatherRemainingMin: nextWeatherRemaining,
+      weatherForecast: nextForecast,
     },
     autoClosedToast,
     weatherToast,
@@ -274,6 +291,7 @@ export default function App() {
     soundEngine.musicVolume = settings.musicVolume / 100;
     soundEngine.sfxVolume = settings.sfxVolume / 100;
     soundEngine.ambientVolume = settings.ambientVolume / 100;
+    soundEngine.syncVolumes();
     try {
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     } catch {
@@ -411,6 +429,7 @@ export default function App() {
           season: advanced.season,
           weather: advanced.weather,
           weatherRemainingMin: advanced.weatherRemainingMin,
+          weatherForecast: advanced.weatherForecast,
         };
       });
 
@@ -493,10 +512,23 @@ export default function App() {
     setSlots(readAllSaveSlots());
   };
 
+  const handleExitToCover = useCallback(() => {
+    soundEngine.click();
+    saveGameToSlot(gameStateRef.current);
+    setActiveModal(null);
+    setActiveNpc(null);
+    setActiveSideJob(null);
+    setActivePrayerAlert(null);
+    setActiveTradition(null);
+    setAccidentInfo(null);
+    setScreen('COVER');
+  }, [saveGameToSlot]);
+
   const handleChangeScene = useCallback(
     (target: SceneId, customSpawn?: { x: number; y: number }) => {
-      soundEngine.click();
       const sc = SCENES[target];
+      if (sc.isIndoor) soundEngine.doorChime();
+      else soundEngine.click();
       setGameState((prev) => {
         const { next } = advanceClockState(prev, 3);
         return {
@@ -565,7 +597,7 @@ export default function App() {
           showToast('Energi Arga terlalu lelah! Mampir ke Warung Asih atau istirahat dulu.');
           return;
         }
-        soundEngine.angklungSuccess();
+        soundEngine.rustleLeaves();
         setGameState((prev) => {
           const { next } = advanceClockState(prev, 20);
           return {
@@ -583,7 +615,7 @@ export default function App() {
         return;
       }
       if (hs.actionType === 'clean_air') {
-        soundEngine.confirm();
+        soundEngine.splashWater();
         setGameState((prev) => {
           const { next } = advanceClockState(prev, 15);
           return {
@@ -657,6 +689,18 @@ export default function App() {
       isInjured: true,
       injuryDaysLeft: 1,
       energy: Math.max(25, curr.energy - 30),
+      transactions: appendTransaction(curr.transactions, {
+        day: curr.day,
+        minutesOfDay: curr.minutesOfDay,
+        type: 'expense',
+        category: 'kesehatan',
+        title: `Biaya Puskesmas (Tertabrak ${info.label})`,
+        detail:
+          addedDebt > 0
+            ? `Tunai ${formatRupiah(paidCash)}, Hutang ${formatRupiah(addedDebt)}`
+            : 'Dibayar tunai',
+        amount: paidCash > 0 ? paidCash : medicalFee,
+      }),
     }));
     setAccidentInfo({ vehicle: vehicleType, medicalFee, paidCash, addedDebt });
     setActiveModal('ACCIDENT');
@@ -715,6 +759,7 @@ export default function App() {
         const { next } = advanceClockState(prev, 8);
         const nextSales = next.totalSalesCount + 1;
         const nextLevel = 1 + Math.floor(nextSales / 8);
+        const itemTotal = order.items.reduce((acc, it) => acc + it.qty, 0);
         return {
           ...next,
           money: next.money + earned,
@@ -725,6 +770,15 @@ export default function App() {
           reputation: Math.max(1, Math.min(5, Number((next.reputation + repDelta).toFixed(2)))),
           wargaSatisfaction: Math.max(10, Math.min(100, next.wargaSatisfaction + satDelta)),
           energy: Math.max(5, next.energy - 2),
+          transactions: appendTransaction(next.transactions, {
+            day: next.day,
+            minutesOfDay: next.minutesOfDay,
+            type: 'income',
+            category: 'warung',
+            title: `Penjualan Warung (${order.customerName})`,
+            detail: `${itemTotal} barang terjual`,
+            amount: earned,
+          }),
         };
       });
 
@@ -754,7 +808,7 @@ export default function App() {
       showToast('Uang tunai Arga tidak cukup!');
       return;
     }
-    soundEngine.confirm();
+    soundEngine.cookingSizzle();
     setGameState((prev) => {
       const { next } = advanceClockState(prev, 12);
       return {
@@ -763,6 +817,15 @@ export default function App() {
         energy: Math.min(100, next.energy + (def.energyRestore ?? 20)),
         activityPoints: computeEffectiveActivityPoints(prev) + 4,
         totalActivitiesCount: (next.totalActivitiesCount ?? 0) + 1,
+        transactions: appendTransaction(next.transactions, {
+          day: next.day,
+          minutesOfDay: next.minutesOfDay,
+          type: 'expense',
+          category: 'konsumsi',
+          title: `Jajan Warung Asih (${def.name})`,
+          detail: `Energi +${def.energyRestore ?? 20}%`,
+          amount: def.retailPrice,
+        }),
       };
     });
     showToast(`Nikmat! Arga menyantap ${def.name} di Warung Asih (+${def.energyRestore}% Energi, +4 Poin).`);
@@ -776,8 +839,26 @@ export default function App() {
 
     if (isSleepWindow || prev.isInjured) {
       const nextDay = hour >= 21 || (prev.isInjured && hour >= 4.5) ? prev.day + 1 : prev.day;
-      const nextSeason = Math.random() < 0.45 ? pickRandomSeason() : prev.season;
-      const morningWeather = rollNextWeather(nextSeason, 'cerah', 4 * 60 + 30);
+      const rolling = ensureWeatherForecast(
+        prev.day,
+        prev.season,
+        prev.weather,
+        prev.weatherForecast
+      );
+      const nextDayForecast = rolling.find((f) => f.day === nextDay);
+      const nextSeason = nextDayForecast?.season ?? prev.season;
+      const morningWeather = nextDayForecast
+        ? {
+            weather: nextDayForecast.morning,
+            durationMin: 95 + Math.floor(Math.random() * 55),
+          }
+        : rollNextWeather(nextSeason, 'cerah', 4 * 60 + 30);
+      const updatedForecast = ensureWeatherForecast(
+        nextDay,
+        nextSeason,
+        morningWeather.weather,
+        rolling
+      );
       const nextState: GameState = {
         ...prev,
         day: nextDay,
@@ -794,6 +875,7 @@ export default function App() {
         season: nextSeason,
         weather: morningWeather.weather,
         weatherRemainingMin: morningWeather.durationMin,
+        weatherForecast: updatedForecast,
         activityPoints: computeEffectiveActivityPoints(prev) + 12,
       };
       setGameState(nextState);
@@ -821,13 +903,22 @@ export default function App() {
       showToast('Uang belanja dapur tidak cukup!');
       return;
     }
-    soundEngine.confirm();
+    soundEngine.cookingSizzle();
     setGameState((prev) => {
       const { next } = advanceClockState(prev, 15);
       return {
         ...next,
         money: next.money - cost,
         energy: Math.min(100, next.energy + gain),
+        transactions: appendTransaction(next.transactions, {
+          day: next.day,
+          minutesOfDay: next.minutesOfDay,
+          type: 'expense',
+          category: 'konsumsi',
+          title: `Masak di Dapur (${mealType === 'kopi' ? 'Kopi' : 'Nasi Liwet'})`,
+          detail: `Energi +${gain}%`,
+          amount: cost,
+        }),
       };
     });
     showToast(`Masakan dapur selesai! Energi Arga pulih +${gain}%.`);
@@ -839,7 +930,8 @@ export default function App() {
       showToast('Saldo Arga tidak cukup untuk naik kendaraan ini!');
       return;
     }
-    soundEngine.cash();
+    soundEngine.marketDepart(vehicleName);
+    if (fare > 0) soundEngine.cash();
     const goingToPasar = gameState.scene !== 'pasar';
     const destScene: SceneId = goingToPasar ? 'pasar' : 'kampung_warung';
     setGameState((prev) => {
@@ -849,6 +941,18 @@ export default function App() {
         money: next.money - fare,
         scene: destScene,
         playerPos: SCENES[destScene].defaultSpawn,
+        transactions:
+          fare > 0
+            ? appendTransaction(next.transactions, {
+                day: next.day,
+                minutesOfDay: next.minutesOfDay,
+                type: 'expense',
+                category: 'transport',
+                title: `Ongkos ${vehicleName}`,
+                detail: goingToPasar ? 'Perjalanan ke Pasar' : 'Pulang ke Kampung',
+                amount: fare,
+              })
+            : next.transactions,
       };
     });
     setActiveModal(null);
@@ -868,6 +972,7 @@ export default function App() {
     courierName: string
   ) => {
     soundEngine.cash();
+    const totalQty = Object.values(cart).reduce((acc, q) => acc + (q > 0 ? q : 0), 0);
     setGameState((prev) => {
       const { next } = advanceClockState(prev, 15);
       const nextInv = { ...next.inventory };
@@ -880,6 +985,15 @@ export default function App() {
         inventory: nextInv,
         activityPoints: computeEffectiveActivityPoints(prev) + 8,
         totalActivitiesCount: (next.totalActivitiesCount ?? 0) + 1,
+        transactions: appendTransaction(next.transactions, {
+          day: next.day,
+          minutesOfDay: next.minutesOfDay,
+          type: 'expense',
+          category: 'pasar',
+          title: 'Belanja Kulakan Pasar',
+          detail: `${totalQty} barang${ongkir > 0 ? ` + ongkir ${courierName}` : ''}`,
+          amount: totalCost,
+        }),
       };
     });
     setActiveModal(null);
@@ -905,6 +1019,15 @@ export default function App() {
         totalSideJobsCount: (next.totalSideJobsCount ?? 0) + 1,
         reputation: Math.min(5, Number((next.reputation + 0.04).toFixed(2))),
         wargaSatisfaction: Math.min(100, next.wargaSatisfaction + 3),
+        transactions: appendTransaction(next.transactions, {
+          day: next.day,
+          minutesOfDay: next.minutesOfDay,
+          type: 'income',
+          category: 'kerja',
+          title: `Upah ${job.title}`,
+          detail: job.locationLabel,
+          amount: job.reward,
+        }),
       };
     });
     setActiveModal(null);
@@ -1058,6 +1181,18 @@ export default function App() {
   const currentSceneDef = SCENES[gameState.scene];
   const npcsInCurrentScene = useMemo(() => NPCS.filter((n) => n.scene === gameState.scene), [gameState.scene]);
   const isSleepReminder = currentHour >= 21 || currentHour < 4.5;
+
+  // Contextual environmental ambient loop (rain intensification, pasar bustle, river babble, village crickets)
+  const ambientTimeBucket = Math.floor(gameState.minutesOfDay / 30);
+  useEffect(() => {
+    soundEngine.updateEnvironment({
+      active: screen === 'PLAYING',
+      sceneId: gameState.scene,
+      isIndoor: currentSceneDef.isIndoor,
+      weather: gameState.weather,
+      minutesOfDay: ambientTimeBucket * 30,
+    });
+  }, [screen, gameState.scene, currentSceneDef.isIndoor, gameState.weather, ambientTimeBucket]);
 
   // Render Cover Screen
   if (screen === 'COVER') {
@@ -1556,6 +1691,15 @@ export default function App() {
               activityPoints: computeEffectiveActivityPoints(prev) + 35,
               totalActivitiesCount: (prev.totalActivitiesCount ?? 0) + 1,
               paidTraditions: [...prev.paidTraditions, `${trad.id}_d${prev.day}`],
+              transactions: appendTransaction(prev.transactions, {
+                day: prev.day,
+                minutesOfDay: prev.minutesOfDay,
+                type: 'expense',
+                category: 'tradisi',
+                title: `Urunan Tradisi ${trad.id}`,
+                detail: `Bersama ${trad.hostNpc}`,
+                amount: trad.urunanAmount,
+              }),
               reviews: [
                 {
                   id: `rev_${Date.now()}`,
@@ -1632,6 +1776,18 @@ export default function App() {
               money: prev.money - amount,
               debt: Math.max(0, prev.debt - amount),
               debtRecords: prev.debt - amount <= 0 ? [] : prev.debtRecords,
+              transactions: appendTransaction(prev.transactions, {
+                day: prev.day,
+                minutesOfDay: prev.minutesOfDay,
+                type: 'expense',
+                category: 'hutang',
+                title: 'Cicil / Lunasi Hutang',
+                detail:
+                  prev.debt - amount <= 0
+                    ? 'Hutang lunas!'
+                    : `Sisa ${formatRupiah(prev.debt - amount)}`,
+                amount,
+              }),
             }));
             showToast(`Hutang dibayar sebesar ${formatRupiah(amount)}!`);
           }}
@@ -1722,6 +1878,7 @@ export default function App() {
           settings={settings}
           onUpdate={setSettings}
           onReplayTutorial={() => setActiveModal('CHANGELOG')}
+          onExitGame={handleExitToCover}
           onClose={() => setActiveModal(null)}
         />
       )}
