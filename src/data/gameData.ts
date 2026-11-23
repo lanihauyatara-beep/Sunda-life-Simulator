@@ -1306,12 +1306,43 @@ export const NPCS: NpcDef[] = [
     y: 43,
     walkSpeed: 5.5,
     patrolPath: [
-      { x: 24, y: 43, pauseSec: 4.5 }, // Saung Lisung
-      { x: 36, y: 50, pauseSec: 2.0 }, // Pematang Sawah
-      { x: 58, y: 50, pauseSec: 2.5 }, // Jembatan Sungai
-      { x: 75, y: 40, pauseSec: 4.5 }, // Kebun Buah Kampung
-      { x: 58, y: 50, pauseSec: 2.0 }, // Kembali lewat jembatan
-      { x: 28, y: 48, pauseSec: 3.0 }, // Dekat Saung Lisung
+      { x: 24, y: 43, pauseSec: 4.5, label: 'Saung Lisung' },
+      { x: 36, y: 50, pauseSec: 2.0, label: 'Pematang Sawah' },
+      { x: 58, y: 50, pauseSec: 2.5, label: 'Jembatan Sungai' },
+      { x: 75, y: 40, pauseSec: 4.5, label: 'Kebun Buah' },
+      { x: 58, y: 50, pauseSec: 2.0, label: 'Jembatan Sungai' },
+      { x: 28, y: 48, pauseSec: 3.0, label: 'Saung Lisung' },
+    ],
+    dailySchedule: [
+      {
+        id: 'abah_pagi',
+        startMinutes: 300,
+        endMinutes: 690,
+        waypoints: [
+          { x: 24, y: 43, pauseSec: 3.5, label: 'Saung Lisung' },
+          { x: 75, y: 40, pauseSec: 4.5, label: 'Kebun Buah' },
+          { x: 36, y: 50, pauseSec: 2.5, label: 'Pematang Sawah' },
+        ],
+      },
+      {
+        id: 'abah_siang',
+        startMinutes: 690,
+        endMinutes: 870,
+        waypoints: [
+          { x: 24, y: 43, pauseSec: 5.0, label: 'Istirahat Saung Lisung' },
+          { x: 32, y: 48, pauseSec: 3.0, label: 'Tepi Sawah' },
+        ],
+      },
+      {
+        id: 'abah_sore_malam',
+        startMinutes: 870,
+        endMinutes: 300,
+        waypoints: [
+          { x: 75, y: 40, pauseSec: 4.0, label: 'Kebun Buah' },
+          { x: 58, y: 50, pauseSec: 2.5, label: 'Jembatan Sungai' },
+          { x: 24, y: 43, pauseSec: 4.5, label: 'Saung Lisung' },
+        ],
+      },
     ],
     shirtColor: '#78350f',
     accentColor: '#fde68a',
@@ -1363,13 +1394,61 @@ export const NPCS: NpcDef[] = [
     y: 39,
     walkSpeed: 6.2,
     patrolPath: [
-      { x: 78, y: 39, pauseSec: 4.5 }, // Halaman Masjid Al-Ikhlas
-      { x: 58, y: 44, pauseSec: 2.0 }, // Jalan antara Masjid & Warung Asih
-      { x: 47, y: 46, pauseSec: 3.5 }, // Depan Warung Asih
-      { x: 39, y: 54, pauseSec: 1.5 }, // Simpang Warung
-      { x: 27, y: 55, pauseSec: 4.0 }, // Depan Warung Arga
-      { x: 39, y: 54, pauseSec: 1.5 },
-      { x: 72, y: 46, pauseSec: 2.5 }, // Gerbang Masjid
+      { x: 78, y: 39, pauseSec: 4.5, label: 'Masjid Al-Ikhlas' },
+      { x: 58, y: 44, pauseSec: 2.0, label: 'Jalan Kampung' },
+      { x: 47, y: 46, pauseSec: 3.5, label: 'Warung Asih' },
+      { x: 27, y: 55, pauseSec: 4.0, label: 'Warung Arga' },
+      { x: 72, y: 46, pauseSec: 2.5, label: 'Gerbang Masjid' },
+    ],
+    dailySchedule: [
+      {
+        id: 'ustaz_subuh',
+        startMinutes: 270,
+        endMinutes: 420,
+        waypoints: [
+          { x: 78, y: 39, pauseSec: 5.0, label: 'Masjid Al-Ikhlas' },
+          { x: 70, y: 46, pauseSec: 3.0, label: 'Pelataran Masjid' },
+        ],
+      },
+      {
+        id: 'ustaz_pagi',
+        startMinutes: 420,
+        endMinutes: 690,
+        waypoints: [
+          { x: 78, y: 39, pauseSec: 3.5, label: 'Masjid Al-Ikhlas' },
+          { x: 47, y: 46, pauseSec: 4.0, label: 'Warung Asih' },
+          { x: 27, y: 55, pauseSec: 4.0, label: 'Warung Arga' },
+        ],
+      },
+      {
+        id: 'ustaz_dzuhur',
+        startMinutes: 690,
+        endMinutes: 810,
+        waypoints: [
+          { x: 78, y: 39, pauseSec: 5.5, label: 'Masjid Al-Ikhlas' },
+          { x: 64, y: 44, pauseSec: 2.5, label: 'Jalan Masjid' },
+        ],
+      },
+      {
+        id: 'ustaz_siang_sore',
+        startMinutes: 810,
+        endMinutes: 1050,
+        waypoints: [
+          { x: 27, y: 55, pauseSec: 4.0, label: 'Warung Arga' },
+          { x: 47, y: 46, pauseSec: 3.5, label: 'Warung Asih' },
+          { x: 78, y: 39, pauseSec: 4.5, label: 'Masjid Al-Ikhlas' },
+        ],
+      },
+      {
+        id: 'ustaz_maghrib_isya',
+        startMinutes: 1050,
+        endMinutes: 270,
+        waypoints: [
+          { x: 78, y: 39, pauseSec: 5.5, label: 'Masjid Al-Ikhlas' },
+          { x: 47, y: 46, pauseSec: 3.0, label: 'Warung Asih' },
+          { x: 72, y: 46, pauseSec: 3.5, label: 'Teras Masjid' },
+        ],
+      },
     ],
     shirtColor: '#f8fafc',
     accentColor: '#059669',
@@ -1421,14 +1500,43 @@ export const NPCS: NpcDef[] = [
     y: 56,
     walkSpeed: 7.2,
     patrolPath: [
-      { x: 26, y: 56, pauseSec: 3.5 }, // Depan Warung Arga
-      { x: 18, y: 74, pauseSec: 3.5 }, // Halte Ke Pasar
-      { x: 34, y: 63, pauseSec: 1.5 }, // Trotoar Kampung
-      { x: 48, y: 47, pauseSec: 4.0 }, // Saung Warung Asih
-      { x: 64, y: 43, pauseSec: 2.0 }, // Arah Masjid
-      { x: 75, y: 40, pauseSec: 3.0 }, // Pelataran Masjid Al-Ikhlas
-      { x: 56, y: 46, pauseSec: 1.5 },
-      { x: 39, y: 55, pauseSec: 1.5 },
+      { x: 26, y: 56, pauseSec: 3.5, label: 'Warung Arga' },
+      { x: 18, y: 74, pauseSec: 3.5, label: 'Halte Pasar' },
+      { x: 48, y: 47, pauseSec: 4.0, label: 'Warung Asih' },
+      { x: 75, y: 40, pauseSec: 3.0, label: 'Masjid Al-Ikhlas' },
+    ],
+    dailySchedule: [
+      {
+        id: 'asep_pagi',
+        startMinutes: 300,
+        endMinutes: 540,
+        waypoints: [
+          { x: 18, y: 74, pauseSec: 3.5, label: 'Halte Pasar' },
+          { x: 48, y: 47, pauseSec: 4.0, label: 'Warung Asih' },
+          { x: 26, y: 56, pauseSec: 3.5, label: 'Warung Arga' },
+        ],
+      },
+      {
+        id: 'asep_siang',
+        startMinutes: 540,
+        endMinutes: 1020,
+        waypoints: [
+          { x: 26, y: 56, pauseSec: 3.5, label: 'Warung Arga' },
+          { x: 48, y: 47, pauseSec: 3.5, label: 'Warung Asih' },
+          { x: 75, y: 40, pauseSec: 3.5, label: 'Masjid Al-Ikhlas' },
+          { x: 18, y: 74, pauseSec: 3.5, label: 'Halte Pasar' },
+        ],
+      },
+      {
+        id: 'asep_malam',
+        startMinutes: 1020,
+        endMinutes: 300,
+        waypoints: [
+          { x: 48, y: 47, pauseSec: 4.5, label: 'Ngopi Warung Asih' },
+          { x: 26, y: 56, pauseSec: 3.5, label: 'Warung Arga' },
+          { x: 18, y: 74, pauseSec: 3.0, label: 'Halte Kampung' },
+        ],
+      },
     ],
     shirtColor: '#0369a1',
     accentColor: '#bae6fd',
@@ -1480,13 +1588,39 @@ export const NPCS: NpcDef[] = [
     y: 51,
     walkSpeed: 6.0,
     patrolPath: [
-      { x: 25, y: 51, pauseSec: 4.0 }, // Imah Pak RT
-      { x: 21, y: 60, pauseSec: 1.5 },
-      { x: 14, y: 70, pauseSec: 4.0 }, // Pos Ronda Kampung
-      { x: 25, y: 56, pauseSec: 1.5 },
-      { x: 40, y: 50, pauseSec: 1.5 },
-      { x: 49, y: 42, pauseSec: 3.5 }, // Depan Rumah Arga
-      { x: 40, y: 50, pauseSec: 1.5 },
+      { x: 25, y: 51, pauseSec: 4.0, label: 'Imah Pak RT' },
+      { x: 14, y: 70, pauseSec: 4.0, label: 'Pos Ronda' },
+      { x: 49, y: 42, pauseSec: 3.5, label: 'Rumah Arga' },
+    ],
+    dailySchedule: [
+      {
+        id: 'rt_pagi',
+        startMinutes: 300,
+        endMinutes: 540,
+        waypoints: [
+          { x: 25, y: 51, pauseSec: 4.0, label: 'Imah Pak RT' },
+          { x: 49, y: 42, pauseSec: 3.5, label: 'Rumah Arga' },
+        ],
+      },
+      {
+        id: 'rt_siang',
+        startMinutes: 540,
+        endMinutes: 1050,
+        waypoints: [
+          { x: 25, y: 51, pauseSec: 3.5, label: 'Imah Pak RT' },
+          { x: 49, y: 42, pauseSec: 3.5, label: 'Rumah Arga' },
+          { x: 14, y: 70, pauseSec: 3.5, label: 'Pos Ronda' },
+        ],
+      },
+      {
+        id: 'rt_malam',
+        startMinutes: 1050,
+        endMinutes: 300,
+        waypoints: [
+          { x: 14, y: 70, pauseSec: 5.0, label: 'Ronda Malam' },
+          { x: 25, y: 51, pauseSec: 4.0, label: 'Imah Pak RT' },
+        ],
+      },
     ],
     shirtColor: '#1e3a8a',
     accentColor: '#fbbf24',
@@ -1538,11 +1672,39 @@ export const NPCS: NpcDef[] = [
     y: 44,
     walkSpeed: 6.4,
     patrolPath: [
-      { x: 68, y: 44, pauseSec: 4.0 }, // Imah Warga Kanan
-      { x: 52, y: 43, pauseSec: 3.5 }, // Depan Rumah Arga
-      { x: 40, y: 56, pauseSec: 2.0 }, // Persimpangan Kompleks
-      { x: 56, y: 61, pauseSec: 3.5 }, // Imah Warga Bawah
-      { x: 68, y: 55, pauseSec: 2.0 },
+      { x: 68, y: 44, pauseSec: 4.0, label: 'Imah Warga Kanan' },
+      { x: 52, y: 43, pauseSec: 3.5, label: 'Rumah Arga' },
+      { x: 56, y: 61, pauseSec: 3.5, label: 'Imah Warga Bawah' },
+    ],
+    dailySchedule: [
+      {
+        id: 'imas_pagi',
+        startMinutes: 300,
+        endMinutes: 660,
+        waypoints: [
+          { x: 68, y: 44, pauseSec: 4.0, label: 'Imah Ceu Imas' },
+          { x: 52, y: 43, pauseSec: 3.5, label: 'Rumah Arga' },
+        ],
+      },
+      {
+        id: 'imas_siang',
+        startMinutes: 660,
+        endMinutes: 1050,
+        waypoints: [
+          { x: 68, y: 44, pauseSec: 3.5, label: 'Imah Ceu Imas' },
+          { x: 56, y: 61, pauseSec: 3.5, label: 'Imah Warga Bawah' },
+          { x: 52, y: 43, pauseSec: 3.5, label: 'Rumah Arga' },
+        ],
+      },
+      {
+        id: 'imas_malam',
+        startMinutes: 1050,
+        endMinutes: 300,
+        waypoints: [
+          { x: 68, y: 44, pauseSec: 5.0, label: 'Imah Ceu Imas' },
+          { x: 56, y: 61, pauseSec: 3.5, label: 'Teras Tetangga' },
+        ],
+      },
     ],
     shirtColor: '#be185d',
     accentColor: '#fbcfe8',
@@ -1594,10 +1756,32 @@ export const NPCS: NpcDef[] = [
     y: 48,
     walkSpeed: 6.6,
     patrolPath: [
-      { x: 26, y: 48, pauseSec: 4.5 }, // Bale Patemon / Balai Desa
-      { x: 46, y: 56, pauseSec: 2.5 }, // Pelataran Tengah
-      { x: 66, y: 48, pauseSec: 4.5 }, // Bumi Ageung
-      { x: 54, y: 62, pauseSec: 2.5 }, // Halaman Adat
+      { x: 26, y: 48, pauseSec: 4.5, label: 'Bale Patemon' },
+      { x: 46, y: 56, pauseSec: 2.5, label: 'Pelataran Tengah' },
+      { x: 66, y: 48, pauseSec: 4.5, label: 'Bumi Ageung' },
+      { x: 54, y: 62, pauseSec: 2.5, label: 'Halaman Adat' },
+    ],
+    dailySchedule: [
+      {
+        id: 'ujang_pagi',
+        startMinutes: 300,
+        endMinutes: 720,
+        waypoints: [
+          { x: 26, y: 48, pauseSec: 4.0, label: 'Bale Patemon' },
+          { x: 46, y: 56, pauseSec: 2.5, label: 'Pelataran' },
+          { x: 66, y: 48, pauseSec: 4.0, label: 'Bumi Ageung' },
+        ],
+      },
+      {
+        id: 'ujang_siang_malam',
+        startMinutes: 720,
+        endMinutes: 300,
+        waypoints: [
+          { x: 66, y: 48, pauseSec: 4.0, label: 'Bumi Ageung' },
+          { x: 54, y: 62, pauseSec: 3.0, label: 'Halaman Adat' },
+          { x: 26, y: 48, pauseSec: 4.5, label: 'Bale Patemon' },
+        ],
+      },
     ],
     shirtColor: '#b45309',
     accentColor: '#fed7aa',
@@ -1649,10 +1833,32 @@ export const NPCS: NpcDef[] = [
     y: 36,
     walkSpeed: 6.2,
     patrolPath: [
-      { x: 56, y: 36, pauseSec: 4.5 }, // Depan Ruang Kelas Utama
-      { x: 42, y: 46, pauseSec: 3.0 }, // Lapangan Upacara
-      { x: 35, y: 62, pauseSec: 3.5 }, // Dekat Gerbang / Halte Sekolah
-      { x: 60, y: 54, pauseSec: 3.0 }, // Sisi Kanan Halaman
+      { x: 56, y: 36, pauseSec: 4.5, label: 'Ruang Kelas' },
+      { x: 42, y: 46, pauseSec: 3.0, label: 'Lapangan Upacara' },
+      { x: 35, y: 62, pauseSec: 3.5, label: 'Halte Sekolah' },
+      { x: 60, y: 54, pauseSec: 3.0, label: 'Halaman Sekolah' },
+    ],
+    dailySchedule: [
+      {
+        id: 'nenden_sekolah',
+        startMinutes: 360,
+        endMinutes: 780,
+        waypoints: [
+          { x: 56, y: 36, pauseSec: 4.5, label: 'Ruang Kelas' },
+          { x: 42, y: 46, pauseSec: 3.0, label: 'Lapangan Upacara' },
+          { x: 60, y: 54, pauseSec: 3.0, label: 'Halaman Kanan' },
+        ],
+      },
+      {
+        id: 'nenden_sore',
+        startMinutes: 780,
+        endMinutes: 360,
+        waypoints: [
+          { x: 42, y: 46, pauseSec: 3.0, label: 'Lapangan Sekolah' },
+          { x: 35, y: 62, pauseSec: 4.0, label: 'Halte Sekolah' },
+          { x: 56, y: 36, pauseSec: 4.0, label: 'Ruang Guru' },
+        ],
+      },
     ],
     shirtColor: '#0f766e',
     accentColor: '#ccfbf1',
@@ -1704,11 +1910,30 @@ export const NPCS: NpcDef[] = [
     y: 47,
     walkSpeed: 5.2,
     patrolPath: [
-      { x: 26, y: 47, pauseSec: 4.5 }, // Pos Rimba Hutan Tutupan
-      { x: 34, y: 58, pauseSec: 2.5 }, // Tepi Jembatan Kayu
-      { x: 56, y: 62, pauseSec: 3.0 }, // Menyeberangi Jembatan
-      { x: 66, y: 62, pauseSec: 3.5 }, // Arah Area Air & Pancuran
-      { x: 34, y: 58, pauseSec: 2.0 },
+      { x: 26, y: 47, pauseSec: 4.5, label: 'Pos Rimba' },
+      { x: 56, y: 62, pauseSec: 3.0, label: 'Jembatan Kayu' },
+      { x: 66, y: 62, pauseSec: 3.5, label: 'Arah Area Air' },
+    ],
+    dailySchedule: [
+      {
+        id: 'aki_siang',
+        startMinutes: 300,
+        endMinutes: 1020,
+        waypoints: [
+          { x: 26, y: 47, pauseSec: 4.0, label: 'Pos Rimba' },
+          { x: 66, y: 62, pauseSec: 3.5, label: 'Arah Pancuran' },
+          { x: 34, y: 58, pauseSec: 2.5, label: 'Tepi Jembatan' },
+        ],
+      },
+      {
+        id: 'aki_malam',
+        startMinutes: 1020,
+        endMinutes: 300,
+        waypoints: [
+          { x: 26, y: 47, pauseSec: 5.0, label: 'Pos Rimba' },
+          { x: 34, y: 58, pauseSec: 3.0, label: 'Jembatan Kayu' },
+        ],
+      },
     ],
     shirtColor: '#1f2937',
     accentColor: '#d1fae5',
@@ -1760,9 +1985,30 @@ export const NPCS: NpcDef[] = [
     y: 34,
     walkSpeed: 5.8,
     patrolPath: [
-      { x: 56, y: 34, pauseSec: 4.5 }, // Kios Grosir Pasar Atas
-      { x: 61, y: 42, pauseSec: 4.0 }, // Kios Grosir Pasar Tengah
-      { x: 58, y: 52, pauseSec: 3.5 }, // Pinggir Area Muat Delman
+      { x: 56, y: 34, pauseSec: 4.5, label: 'Kios Grosir Atas' },
+      { x: 61, y: 42, pauseSec: 4.0, label: 'Kios Grosir Tengah' },
+      { x: 58, y: 52, pauseSec: 3.5, label: 'Area Muat Delman' },
+    ],
+    dailySchedule: [
+      {
+        id: 'tatang_pagi',
+        startMinutes: 240,
+        endMinutes: 780,
+        waypoints: [
+          { x: 56, y: 34, pauseSec: 4.0, label: 'Kios Grosir Atas' },
+          { x: 61, y: 42, pauseSec: 3.5, label: 'Kios Tengah' },
+          { x: 58, y: 52, pauseSec: 3.5, label: 'Area Muat Delman' },
+        ],
+      },
+      {
+        id: 'tatang_sore',
+        startMinutes: 780,
+        endMinutes: 240,
+        waypoints: [
+          { x: 61, y: 42, pauseSec: 4.5, label: 'Kios Tengah' },
+          { x: 58, y: 52, pauseSec: 4.0, label: 'Pangkalan Delman' },
+        ],
+      },
     ],
     shirtColor: '#92400e',
     accentColor: '#fde047',

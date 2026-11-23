@@ -12,6 +12,7 @@ import {
   WeatherCondition,
 } from '../types/game';
 import { VEHICLE_INFO } from '../data/gameData';
+import { initSceneNpcs, LiveNpcState, stepSceneNpcs } from '../utils/npcController';
 import { CharacterSprite } from './CharacterAvatar';
 import { VehicleSprite } from './VehicleSprite';
 
@@ -64,15 +65,6 @@ const RAIN_DROPS = Array.from({ length: 34 }, (_, idx) => ({
   durationSec: 0.58 + (idx % 5) * 0.08,
   heightPx: 14 + (idx % 4) * 5,
 }));
-
-interface LiveNpcState {
-  x: number;
-  y: number;
-  facing: 'left' | 'right';
-  isMoving: boolean;
-  wpIndex: number;
-  pauseUntil: number;
-}
 
 interface GameWorldCanvasProps {
   scene: SceneDef;
@@ -277,6 +269,8 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
   const liveNpcsRef = useRef<Record<string, LiveNpcState>>({});
   const lastNpcSyncRef = useRef(0);
   const [liveNpcs, setLiveNpcs] = useState<Record<string, LiveNpcState>>({});
+  const minutesOfDayRef = useRef(minutesOfDay);
+  minutesOfDayRef.current = minutesOfDay;
 
   // Stable callback refs so RAF loop never tears down
   const onUpdatePlayerPosRef = useRef(onUpdatePlayerPos);
@@ -356,34 +350,16 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
     setVehicles(initial);
   }, [scene.id, scene.hasRoad, scene.roadPath, scene.allowedVehicles]);
 
-  // Initialize dynamic patrol state for NPCs in the active scene
+  // Initialize A* pathfinding & daily schedule state for NPCs in the active scene
   useEffect(() => {
     const now = performance.now();
-    const initialNpcs: Record<string, LiveNpcState> = {};
-
-    npcsInScene.forEach((npc, idx) => {
-      const hasPatrol = Boolean(npc.patrolPath && npc.patrolPath.length >= 2);
-      const nextWp = hasPatrol ? npc.patrolPath![1] : null;
-      const initialFacing: 'left' | 'right' =
-        nextWp && nextWp.x < npc.x ? 'left' : 'right';
-
-      initialNpcs[npc.id] = {
-        x: npc.x,
-        y: npc.y,
-        facing: initialFacing,
-        isMoving: false,
-        wpIndex: hasPatrol ? 1 : 0,
-        // Stagger start slightly so villagers begin walking smoothly across landmarks right away
-        pauseUntil: hasPatrol ? now + idx * 450 : 0,
-      };
-    });
-
+    const initialNpcs = initSceneNpcs(npcsInScene, minutesOfDayRef.current, scene.obstacles, now);
     liveNpcsRef.current = initialNpcs;
     lastNpcSyncRef.current = now;
     setLiveNpcs(initialNpcs);
-  }, [scene.id, npcsInScene]);
+  }, [scene.id, scene.obstacles, npcsInScene]);
 
-  // Main 60fps movement + solid obstacle collision + road-following traffic + NPC patrol loop
+  // Main 60fps movement + solid obstacle collision + road-following traffic + NPC pathfinding loop
   useEffect(() => {
     let rafId = 0;
     let lastTime = performance.now();
@@ -543,97 +519,24 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
           }
         }
 
-        // 3. Dynamic NPC patrol movement between village landmarks
+        // 3. Dedicated NPC controller with A* pathfinding & time-of-day routines
         if (npcsInScene.length > 0) {
-          const nextNpcMap: Record<string, LiveNpcState> = {};
-          let anyNpcChanged = false;
-          let stateVisualChanged = false;
-
-          for (const npc of npcsInScene) {
-            const hasPatrol = Boolean(npc.patrolPath && npc.patrolPath.length >= 2);
-            const curr: LiveNpcState = liveNpcsRef.current[npc.id] ?? {
-              x: npc.x,
-              y: npc.y,
-              facing: 'right',
-              isMoving: false,
-              wpIndex: hasPatrol ? 1 : 0,
-              pauseUntil: 0,
-            };
-
-            const distToPlayer = Math.hypot(curr.x - posRef.current.x, curr.y - posRef.current.y);
-
-            if (distToPlayer < 10.5) {
-              // Politely pause and face Arga when player approaches to chat
-              const dxPlayer = posRef.current.x - curr.x;
-              const faceToPlayer: 'left' | 'right' =
-                Math.abs(dxPlayer) > 0.6 ? (dxPlayer < 0 ? 'left' : 'right') : curr.facing;
-              const nextState: LiveNpcState = {
-                ...curr,
-                isMoving: false,
-                facing: faceToPlayer,
-              };
-              if (curr.isMoving || curr.facing !== faceToPlayer) {
-                anyNpcChanged = true;
-                stateVisualChanged = true;
-              }
-              nextNpcMap[npc.id] = nextState;
-            } else if (hasPatrol && npc.patrolPath) {
-              if (now < curr.pauseUntil) {
-                if (curr.isMoving) {
-                  anyNpcChanged = true;
-                  stateVisualChanged = true;
-                }
-                nextNpcMap[npc.id] = { ...curr, isMoving: false };
-              } else {
-                const path = npc.patrolPath;
-                const wpIdx = curr.wpIndex % path.length;
-                const target = path[wpIdx];
-                const dx = target.x - curr.x;
-                const dy = target.y - curr.y;
-                const dist = Math.hypot(dx, dy);
-                const speed = npc.walkSpeed ?? 6.0;
-                const stepDist = speed * dt;
-
-                if (dist <= Math.max(0.45, stepDist)) {
-                  const nextWpIdx = (wpIdx + 1) % path.length;
-                  const pauseMs = (target.pauseSec ?? 3) * 1000;
-                  nextNpcMap[npc.id] = {
-                    x: target.x,
-                    y: target.y,
-                    facing: curr.facing,
-                    isMoving: false,
-                    wpIndex: nextWpIdx,
-                    pauseUntil: now + pauseMs,
-                  };
-                  anyNpcChanged = true;
-                  stateVisualChanged = true;
-                } else {
-                  const nx = curr.x + (dx / dist) * stepDist;
-                  const ny = curr.y + (dy / dist) * stepDist;
-                  const nextFacing: 'left' | 'right' =
-                    dx < -0.04 ? 'left' : dx > 0.04 ? 'right' : curr.facing;
-                  nextNpcMap[npc.id] = {
-                    ...curr,
-                    x: nx,
-                    y: ny,
-                    facing: nextFacing,
-                    isMoving: true,
-                  };
-                  anyNpcChanged = true;
-                  if (!curr.isMoving || curr.facing !== nextFacing) {
-                    stateVisualChanged = true;
-                  }
-                }
-              }
-            } else {
-              nextNpcMap[npc.id] = curr;
+          const { nextMap, anyChanged, visualChanged } = stepSceneNpcs(
+            liveNpcsRef.current,
+            npcsInScene,
+            {
+              now,
+              dt,
+              minutesOfDay: minutesOfDayRef.current,
+              playerPos: posRef.current,
+              obstacles: scene.obstacles,
             }
-          }
+          );
 
-          liveNpcsRef.current = nextNpcMap;
-          if (anyNpcChanged && (stateVisualChanged || now - lastNpcSyncRef.current >= 32)) {
+          liveNpcsRef.current = nextMap;
+          if (anyChanged && (visualChanged || now - lastNpcSyncRef.current >= 32)) {
             lastNpcSyncRef.current = now;
-            setLiveNpcs(nextNpcMap);
+            setLiveNpcs(nextMap);
           }
         }
       }
@@ -973,6 +876,11 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         return (
           <button
             key={npc.id}
+            title={
+              live?.destinationLabel
+                ? `${npc.name} (${npcMoving ? 'Menuju' : 'Di'} ${live.destinationLabel})`
+                : npc.name
+            }
             onClick={(e) => {
               e.stopPropagation();
               onTalkNpc(npc);

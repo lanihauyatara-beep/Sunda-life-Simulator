@@ -166,6 +166,14 @@ export interface NpcWaypoint {
   x: number;
   y: number;
   pauseSec?: number;
+  label?: string;
+}
+
+export interface NpcScheduleSlot {
+  id: string;
+  startMinutes: number; // 0..1439
+  endMinutes: number;   // 0..1440
+  waypoints: NpcWaypoint[];
 }
 
 export interface NpcDef {
@@ -176,6 +184,7 @@ export interface NpcDef {
   x: number;
   y: number;
   patrolPath?: NpcWaypoint[];
+  dailySchedule?: NpcScheduleSlot[];
   walkSpeed?: number; // % per second
   shirtColor: string;
   accentColor: string;

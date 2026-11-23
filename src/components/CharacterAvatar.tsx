@@ -42,7 +42,7 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
         viewBox="0 0 64 96"
         className={`w-13 h-20 drop-shadow-[0_7px_6px_rgba(0,0,0,0.55)] transition-transform duration-150 ${
           facing === 'left' ? 'scale-x-[-1]' : ''
-        } ${isMoving ? 'animate-bounce' : ''}`}
+        }`}
       >
         <defs>
           <linearGradient id={skinGradId} x1="0" y1="0" x2="1" y2="1">
@@ -57,81 +57,94 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
         </defs>
 
         {/* Ground contact shadow */}
-        <ellipse cx="32" cy="89" rx="15" ry="4.5" fill="rgba(0,0,0,0.45)" />
-
-        {/* Trousers / Sarung realistic folds */}
-        <path
-          d="M21 57 L29 57 L28 84 L21 84 Z"
-          fill={hatType === 'kerudung' ? '#3f2e21' : '#334155'}
-          stroke="#0f172a"
-          strokeWidth="1.2"
+        <ellipse
+          cx="32"
+          cy="89"
+          rx="15"
+          ry="4.5"
+          fill="rgba(0,0,0,0.45)"
+          className={isMoving ? 'sunda-walk-shadow' : ''}
         />
-        <path
-          d="M35 57 L43 57 L43 84 L36 84 Z"
-          fill={hatType === 'kerudung' ? '#2e2117' : '#1e293b'}
-          stroke="#0f172a"
-          strokeWidth="1.2"
-        />
-        {/* Leg highlight fold */}
-        <line x1="24" y1="60" x2="23.5" y2="80" stroke="rgba(255,255,255,0.16)" strokeWidth="1.5" />
-        <line x1="39" y1="60" x2="39.5" y2="80" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
 
-        {/* Bandage on leg if injured */}
-        {isInjured && (
-          <g>
-            <rect x="34.5" y="66" width="9.5" height="9" rx="2" fill="#f8fafc" stroke="#ef4444" strokeWidth="1.2" />
-            <line x1="35" y1="70.5" x2="44" y2="70.5" stroke="#ef4444" strokeWidth="1.2" />
+        {/* Back/Left Leg + Sandal */}
+        <g className={isMoving ? 'sunda-walk-leg-l' : ''}>
+          <path
+            d="M21 57 L29 57 L28 84 L21 84 Z"
+            fill={hatType === 'kerudung' ? '#3f2e21' : '#334155'}
+            stroke="#0f172a"
+            strokeWidth="1.2"
+          />
+          <line x1="24" y1="60" x2="23.5" y2="80" stroke="rgba(255,255,255,0.16)" strokeWidth="1.5" />
+          <ellipse cx="24.5" cy="86" rx="5.5" ry="2.8" fill="#5c2d16" stroke="#1c0d06" strokeWidth="1" />
+          <path d="M20 85 Q24.5 83 29 85" stroke="#b45309" strokeWidth="1.3" fill="none" />
+        </g>
+
+        {/* Front/Right Leg + Bandage + Sandal */}
+        <g className={isMoving ? 'sunda-walk-leg-r' : ''}>
+          <path
+            d="M35 57 L43 57 L43 84 L36 84 Z"
+            fill={hatType === 'kerudung' ? '#2e2117' : '#1e293b'}
+            stroke="#0f172a"
+            strokeWidth="1.2"
+          />
+          <line x1="39" y1="60" x2="39.5" y2="80" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
+          {isInjured && (
+            <g>
+              <rect x="34.5" y="66" width="9.5" height="9" rx="2" fill="#f8fafc" stroke="#ef4444" strokeWidth="1.2" />
+              <line x1="35" y1="70.5" x2="44" y2="70.5" stroke="#ef4444" strokeWidth="1.2" />
+            </g>
+          )}
+          <ellipse cx="39.5" cy="86" rx="5.5" ry="2.8" fill="#451a03" stroke="#1c0d06" strokeWidth="1" />
+          <path d="M35 85 Q39.5 83 44 85" stroke="#b45309" strokeWidth="1.3" fill="none" />
+        </g>
+
+        {/* Upper body stride bob / idle breathing */}
+        <g className={isMoving ? 'sunda-walk-bob' : 'sunda-idle-breath'}>
+          {/* Back Arm */}
+          <g className={isMoving ? 'sunda-walk-arm-l' : ''}>
+            <path
+              d="M17 33 Q12 41 13 53 Q15 56 18 54 L20 39 Z"
+              fill={`url(#${skinGradId})`}
+              stroke="#3b2214"
+              strokeWidth="1"
+            />
+            <path d="M16 30 Q12 33 12 40 L20 40 L21 30 Z" fill={shirtColor} stroke="#0f172a" strokeWidth="1.2" />
           </g>
-        )}
 
-        {/* Realistic sandals / shoes */}
-        <ellipse cx="24.5" cy="86" rx="5.5" ry="2.8" fill="#5c2d16" stroke="#1c0d06" strokeWidth="1" />
-        <path d="M20 85 Q24.5 83 29 85" stroke="#b45309" strokeWidth="1.3" fill="none" />
-        <ellipse cx="39.5" cy="86" rx="5.5" ry="2.8" fill="#451a03" stroke="#1c0d06" strokeWidth="1" />
-        <path d="M35 85 Q39.5 83 44 85" stroke="#b45309" strokeWidth="1.3" fill="none" />
+          {/* Torso / Shirt with realistic shoulders & shading */}
+          <path
+            d="M19 30 Q32 27 45 30 L47 40 L44 59 Q32 61 20 59 L17 40 Z"
+            fill={shirtColor}
+            stroke="#0f172a"
+            strokeWidth="1.3"
+          />
+          <path
+            d="M19 30 Q32 27 45 30 L47 40 L44 59 Q32 61 20 59 L17 40 Z"
+            fill={`url(#${shirtGradId})`}
+          />
 
-        {/* Back Arm */}
-        <path
-          d="M17 33 Q12 41 13 53 Q15 56 18 54 L20 39 Z"
-          fill={`url(#${skinGradId})`}
-          stroke="#3b2214"
-          strokeWidth="1"
-        />
-        {/* Sleeve */}
-        <path d="M16 30 Q12 33 12 40 L20 40 L21 30 Z" fill={shirtColor} stroke="#0f172a" strokeWidth="1.2" />
+          {/* Shirt Collar & Placket */}
+          <path d="M25 29 L32 39 L39 29 L36 28 L32 33 L28 28 Z" fill={accentColor} stroke="#1e293b" strokeWidth="0.9" />
+          <line x1="32" y1="39" x2="32" y2="58" stroke="rgba(15,23,42,0.35)" strokeWidth="1.2" />
 
-        {/* Torso / Shirt with realistic shoulders & shading */}
-        <path
-          d="M19 30 Q32 27 45 30 L47 40 L44 59 Q32 61 20 59 L17 40 Z"
-          fill={shirtColor}
-          stroke="#0f172a"
-          strokeWidth="1.3"
-        />
-        <path
-          d="M19 30 Q32 27 45 30 L47 40 L44 59 Q32 61 20 59 L17 40 Z"
-          fill={`url(#${shirtGradId})`}
-        />
+          {/* Arga's Signature Sling Bag Strap */}
+          {isArga && (
+            <path d="M22 30 L42 57" stroke="#78350f" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+          )}
 
-        {/* Shirt Collar & Placket */}
-        <path d="M25 29 L32 39 L39 29 L36 28 L32 33 L28 28 Z" fill={accentColor} stroke="#1e293b" strokeWidth="0.9" />
-        <line x1="32" y1="39" x2="32" y2="58" stroke="rgba(15,23,42,0.35)" strokeWidth="1.2" />
+          {/* Front Arm */}
+          <g className={isMoving ? 'sunda-walk-arm-r' : ''}>
+            <path
+              d="M44 33 Q51 42 50 54 Q48 57 45 55 L43 39 Z"
+              fill={`url(#${skinGradId})`}
+              stroke="#3b2214"
+              strokeWidth="1"
+            />
+            <path d="M43 30 Q49 33 50 40 L43 40 L42 30 Z" fill={shirtColor} stroke="#0f172a" strokeWidth="1.2" />
+          </g>
 
-        {/* Arga's Signature Sling Bag Strap */}
-        {isArga && (
-          <path d="M22 30 L42 57" stroke="#78350f" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
-        )}
-
-        {/* Front Arm */}
-        <path
-          d="M44 33 Q51 42 50 54 Q48 57 45 55 L43 39 Z"
-          fill={`url(#${skinGradId})`}
-          stroke="#3b2214"
-          strokeWidth="1"
-        />
-        <path d="M43 30 Q49 33 50 40 L43 40 L42 30 Z" fill={shirtColor} stroke="#0f172a" strokeWidth="1.2" />
-
-        {/* Neck & Chin Shadow */}
-        <rect x="28.5" y="24" width="7" height="7" rx="2" fill="#c98b63" />
+          {/* Neck & Chin Shadow */}
+          <rect x="28.5" y="24" width="7" height="7" rx="2" fill="#c98b63" />
 
         {/* Realistic Shaped Head */}
         <path
@@ -203,6 +216,7 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
             <path d="M21 11 L47 12.2 L44 14 L21 12.5 Z" fill="#78350f" />
           </g>
         )}
+        </g>
       </svg>
     </div>
   );

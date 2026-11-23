@@ -88,6 +88,113 @@
   will-change: transform, opacity;
 }
 
+/* Realistic Character Walking & Idle Animations */
+@keyframes sundaWalkBob {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-2.2px) rotate(1.2deg);
+  }
+  50% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-2.2px) rotate(-1.2deg);
+  }
+}
+
+@keyframes sundaWalkLegL {
+  0%, 100% {
+    transform: rotate(-16deg) translateY(0px);
+  }
+  50% {
+    transform: rotate(16deg) translateY(-1.6px);
+  }
+}
+
+@keyframes sundaWalkLegR {
+  0%, 100% {
+    transform: rotate(16deg) translateY(-1.6px);
+  }
+  50% {
+    transform: rotate(-16deg) translateY(0px);
+  }
+}
+
+@keyframes sundaWalkArmL {
+  0%, 100% {
+    transform: rotate(14deg);
+  }
+  50% {
+    transform: rotate(-14deg);
+  }
+}
+
+@keyframes sundaWalkArmR {
+  0%, 100% {
+    transform: rotate(-14deg);
+  }
+  50% {
+    transform: rotate(14deg);
+  }
+}
+
+@keyframes sundaWalkShadow {
+  0%, 100% {
+    transform: scaleX(1);
+    opacity: 0.45;
+  }
+  25%, 75% {
+    transform: scaleX(0.86);
+    opacity: 0.34;
+  }
+}
+
+@keyframes sundaIdleBreath {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-0.9px);
+  }
+}
+
+.sunda-walk-bob {
+  transform-origin: 32px 58px;
+  animation: sundaWalkBob 0.52s ease-in-out infinite;
+}
+
+.sunda-walk-leg-l {
+  transform-origin: 25px 57px;
+  animation: sundaWalkLegL 0.52s ease-in-out infinite;
+}
+
+.sunda-walk-leg-r {
+  transform-origin: 39px 57px;
+  animation: sundaWalkLegR 0.52s ease-in-out infinite;
+}
+
+.sunda-walk-arm-l {
+  transform-origin: 17px 33px;
+  animation: sundaWalkArmL 0.52s ease-in-out infinite;
+}
+
+.sunda-walk-arm-r {
+  transform-origin: 46px 33px;
+  animation: sundaWalkArmR 0.52s ease-in-out infinite;
+}
+
+.sunda-walk-shadow {
+  transform-origin: 32px 89px;
+  animation: sundaWalkShadow 0.52s ease-in-out infinite;
+}
+
+.sunda-idle-breath {
+  transform-origin: 32px 58px;
+  animation: sundaIdleBreath 3.2s ease-in-out infinite;
+}
+
 /* Custom thin dark scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
