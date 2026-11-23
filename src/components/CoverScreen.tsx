@@ -1,5 +1,5 @@
-import React from 'react';
-import { Gamepad2, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, ChevronDown, ChevronUp, Gamepad2, Sparkles } from 'lucide-react';
 import { ASSETS, formatRupiah } from '../data/gameData';
 import { SaveSlotSummary } from '../types/game';
 import { PWAInstallButton } from './PWAAndOrientationUI';
@@ -23,6 +23,8 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({
   onOpenSettings,
   onOpenChangelog,
 }) => {
+  const [guideOpen, setGuideOpen] = useState(true);
+
   return (
     <div className="relative w-screen h-[100dvh] overflow-y-auto overflow-x-hidden bg-slate-950 select-none">
       {/* Cover Artwork Matching Reference Layout with Pak GuruAI Mascot & Sunda Village */}
@@ -317,34 +319,89 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({
             </div>
           </div>
 
-          {/* RIGHT FOREGROUND OVERLAY: Pak GuruAI STUDIO Brand Lockup + Version + Yang Baru + Install */}
-          <div className="self-end flex flex-col items-center text-center mb-1 sm:mb-4 lg:mb-10 lg:mr-10 [@media(max-height:520px)]:mb-0">
-            <div className="drop-shadow-[0_6px_14px_rgba(0,0,0,0.85)]">
-              <div className="font-display text-2xl sm:text-4xl lg:text-5xl [@media(max-height:520px)]:text-2xl font-black tracking-tight leading-none">
-                <span className="text-white">Pak </span>
-                <span className="text-amber-400">GuruAI</span>
-              </div>
-              <div className="text-[10px] sm:text-xs lg:text-sm font-extrabold tracking-[0.36em] sm:tracking-[0.42em] text-amber-100 uppercase mt-1">
-                S T U D I O
-              </div>
-            </div>
-
-            <div className="mt-1.5 sm:mt-2 text-[10px] sm:text-xs font-bold text-slate-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
-              Versi 2.2 · Edisi Sunda Priangan
-            </div>
-
-            <div className="mt-2 flex flex-col sm:flex-row lg:flex-col items-center gap-1.5">
+          {/* RIGHT FOREGROUND OVERLAY: Petunjuk Permainan + Pak GuruAI STUDIO Brand Lockup */}
+          <div className="w-[44%] max-w-[390px] self-stretch flex flex-col items-end justify-between gap-2 py-1">
+            {/* Petunjuk Permainan Sebelum Mulai */}
+            <div className="w-full rounded-xl sm:rounded-2xl bg-slate-950/85 backdrop-blur-md border-2 border-amber-400/60 shadow-2xl overflow-hidden">
               <button
-                onClick={onOpenChangelog}
-                className={`px-4 sm:px-6 py-1.5 sm:py-2 rounded-full bg-slate-900/90 border-2 border-amber-400/80 text-amber-200 text-xs sm:text-sm font-bold shadow-xl flex items-center gap-2 transition-all ${
-                  focusedIndex === 3 ? 'ally-focus bg-slate-800 scale-105' : 'hover:bg-slate-800'
-                }`}
+                type="button"
+                onClick={() => setGuideOpen((v) => !v)}
+                className="w-full px-3 sm:px-4 py-2 flex items-center justify-between bg-slate-900/90 border-b border-amber-400/25 text-left"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Yang Baru &amp; Panduan</span>
+                <span className="flex items-center gap-1.5 text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-amber-300">
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>Petunjuk Permainan</span>
+                </span>
+                {guideOpen ? (
+                  <ChevronUp className="w-4 h-4 text-amber-300 shrink-0" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-amber-300 shrink-0" />
+                )}
               </button>
 
-              <PWAInstallButton compact />
+              {guideOpen && (
+                <ul className="px-3 sm:px-4 py-2 sm:py-2.5 space-y-1.5 text-[10px] sm:text-[11px] text-slate-200 leading-snug max-h-[180px] sm:max-h-none overflow-y-auto">
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-amber-300 shrink-0">1.</span>
+                    <span>
+                      <strong className="text-white">Gerak &amp; Aksi:</strong> Pakai{' '}
+                      <span className="text-amber-200 font-semibold">WASD / Panah / Klik Tanah / Analog</span>. Dekati tempat atau warga lalu tekan{' '}
+                      <span className="text-amber-200 font-semibold">[A]</span>.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-amber-300 shrink-0">2.</span>
+                    <span>
+                      <strong className="text-white">Warung (09.00–17.00):</strong> Buka warung, layani warga, kulakan di Pasar (naik Angkot/Ojek/Delman), &amp;{' '}
+                      <span className="text-emerald-300 font-semibold">Renovasi Warung</span> untuk buka slot barang baru!
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-amber-300 shrink-0">3.</span>
+                    <span>
+                      <strong className="text-white">Tata Krama Sunda &amp; Sholat:</strong> Pilih{' '}
+                      <span className="text-emerald-300 font-semibold">salam Basa Sunda sopan</span> saat menyapa warga untuk bonus poin, dan sholat saat Adzan tiba.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-amber-300 shrink-0">4.</span>
+                    <span>
+                      <strong className="text-white">Kerja &amp; Misi Harian:</strong> Ambil kerja sampingan pagi/malam (bersihkan masjid, ronda, dll.) &amp; pantau cuaca 3 hari di HP{' '}
+                      <span className="text-amber-200 font-semibold">[X]</span>.
+                    </span>
+                  </li>
+                </ul>
+              )}
+            </div>
+
+            <div className="flex flex-col items-center sm:items-end text-center sm:text-right mb-1 sm:mb-2 lg:mr-4 [@media(max-height:520px)]:mb-0">
+              <div className="drop-shadow-[0_6px_14px_rgba(0,0,0,0.85)]">
+                <div className="font-display text-2xl sm:text-4xl lg:text-5xl [@media(max-height:520px)]:text-2xl font-black tracking-tight leading-none">
+                  <span className="text-white">Pak </span>
+                  <span className="text-amber-400">GuruAI</span>
+                </div>
+                <div className="text-[10px] sm:text-xs lg:text-sm font-extrabold tracking-[0.36em] sm:tracking-[0.42em] text-amber-100 uppercase mt-1">
+                  S T U D I O
+                </div>
+              </div>
+
+              <div className="mt-1 sm:mt-1.5 text-[10px] sm:text-xs font-bold text-slate-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
+                Versi 2.2 · Edisi Sunda Priangan
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">
+                <button
+                  onClick={onOpenChangelog}
+                  className={`px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full bg-slate-900/90 border-2 border-amber-400/80 text-amber-200 text-xs sm:text-sm font-bold shadow-xl flex items-center gap-2 transition-all ${
+                    focusedIndex === 3 ? 'ally-focus bg-slate-800 scale-105' : 'hover:bg-slate-800'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Yang Baru &amp; Panduan</span>
+                </button>
+
+                <PWAInstallButton compact />
+              </div>
             </div>
           </div>
         </div>

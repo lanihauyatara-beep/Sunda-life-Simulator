@@ -158,6 +158,234 @@ export function getPlayerRankInfo(points: number): RankTierInfo {
   };
 }
 
+export interface WarungRenovationTier {
+  level: number;
+  name: string;
+  slotCount: number;
+  cost: number;
+  recommendedRanks: RankTierName[];
+  rankRequirementLabel: string;
+  description: string;
+  unlockedItemIds: string[];
+}
+
+export const WARUNG_RENOVATION_TIERS: WarungRenovationTier[] = [
+  {
+    level: 0,
+    name: 'Warung Bambu Awal',
+    slotCount: 8,
+    cost: 0,
+    recommendedRanks: ['Warrior', 'Elite', 'Master', 'Grandmaster', 'Epic', 'Legend', 'Mythic'],
+    rankRequirementLabel: 'Terbuka sejak awal',
+    description: 'Etalase awal dengan 8 slot kebutuhan pokok harian kampung.',
+    unlockedItemIds: [
+      'kopi_kapal',
+      'teh_manis',
+      'gorengan',
+      'beras_1kg',
+      'minyak_1l',
+      'telur_setengah',
+      'gas_3kg',
+      'galon_air',
+    ],
+  },
+  {
+    level: 1,
+    name: 'Warung Kayu Semi-Permanen',
+    slotCount: 12,
+    cost: 175000,
+    recommendedRanks: ['Grandmaster', 'Epic', 'Legend', 'Mythic'],
+    rankRequirementLabel: 'Rank Grandmaster+ atau Uang > Rp 175.000',
+    description: 'Menambah rak jajanan tradisional Sunda: Mie Instan, Surabi, Peuyeum & Bajigur (+4 slot).',
+    unlockedItemIds: ['mie_instan', 'surabi', 'peuyeum', 'bajigur'],
+  },
+  {
+    level: 2,
+    name: 'Warung Juragan Grandmaster',
+    slotCount: 17,
+    cost: 350000,
+    recommendedRanks: ['Grandmaster', 'Epic', 'Legend', 'Mythic'],
+    rankRequirementLabel: 'Rank Grandmaster+ atau Uang > Rp 350.000',
+    description: 'Etalase kaca & kanopi musiman: Jas Hujan, Payung, Bandrek, Minyak Angin & Es Cendol (+5 slot).',
+    unlockedItemIds: ['jas_hujan', 'payung_lipat', 'bandrek_hangat', 'minyak_angin', 'es_cendol'],
+  },
+  {
+    level: 3,
+    name: 'Toko Kelontong Legend Priangan',
+    slotCount: 22,
+    cost: 600000,
+    recommendedRanks: ['Legend', 'Mythic'],
+    rankRequirementLabel: 'Rank Legend+ atau Uang > Rp 600.000',
+    description: 'Warung termegah di Sukamaju! Membuka seluruh 22 barang termasuk Caping & Hasil Alam segar (+5 slot).',
+    unlockedItemIds: ['caping_bambu', 'ikan_mas', 'ikan_dewa', 'buah_kebun', 'herbal_hutan'],
+  },
+];
+
+export function getUnlockedWarungItemIds(renovationLevel = 0): string[] {
+  const safeLevel = Math.max(0, Math.min(WARUNG_RENOVATION_TIERS.length - 1, Math.floor(renovationLevel)));
+  const ids: string[] = [];
+  for (let i = 0; i <= safeLevel; i++) {
+    ids.push(...WARUNG_RENOVATION_TIERS[i].unlockedItemIds);
+  }
+  return ids;
+}
+
+export function getWarungRenovationInfo(state: Partial<GameState>) {
+  const currentLevel = Math.max(
+    0,
+    Math.min(WARUNG_RENOVATION_TIERS.length - 1, Math.floor(state.warungRenovationLevel ?? 0))
+  );
+  const currentTier = WARUNG_RENOVATION_TIERS[currentLevel];
+  const nextTier =
+    currentLevel < WARUNG_RENOVATION_TIERS.length - 1
+      ? WARUNG_RENOVATION_TIERS[currentLevel + 1]
+      : null;
+  const rankInfo = getPlayerRankInfo(computeEffectiveActivityPoints(state));
+  const money = state.money ?? 0;
+
+  if (!nextTier) {
+    return {
+      currentLevel,
+      currentTier,
+      nextTier: null,
+      rankInfo,
+      meetsRank: true,
+      moneyExceedsCost: false,
+      canAfford: false,
+      canRenovate: false,
+      unlockedItemIds: getUnlockedWarungItemIds(currentLevel),
+    };
+  }
+
+  const meetsRank = nextTier.recommendedRanks.includes(rankInfo.tier);
+  const moneyExceedsCost = money > nextTier.cost;
+  const canAfford = money >= nextTier.cost;
+  const canRenovate = (meetsRank || moneyExceedsCost) && canAfford;
+
+  return {
+    currentLevel,
+    currentTier,
+    nextTier,
+    rankInfo,
+    meetsRank,
+    moneyExceedsCost,
+    canAfford,
+    canRenovate,
+    unlockedItemIds: getUnlockedWarungItemIds(currentLevel),
+  };
+}
+
+export interface GreetingOption {
+  id: string;
+  text: string;
+  textId: string;
+  isAppropriate: boolean;
+  bonusPoints: number;
+  npcReaction: string;
+  npcReactionId: string;
+  feedbackLabel: string;
+}
+
+export function getGreetingOptionsForNpc(npc: NpcDef, minutesOfDay: number): GreetingOption[] {
+  const hour = (minutesOfDay / 60) % 24;
+  const timeSu =
+    hour >= 4 && hour < 11
+      ? 'énjing'
+      : hour >= 11 && hour < 15
+      ? 'siang'
+      : hour >= 15 && hour < 18
+      ? 'sonten'
+      : 'wengi';
+  const timeId =
+    hour >= 4 && hour < 11
+      ? 'pagi'
+      : hour >= 11 && hour < 15
+      ? 'siang'
+      : hour >= 15 && hour < 18
+      ? 'sore'
+      : 'malam';
+  const wrongTimeSu = timeSu === 'énjing' ? 'wengi' : 'énjing';
+  const wrongTimeId = timeId === 'pagi' ? 'malam' : 'pagi';
+
+  const isElderOrReligious =
+    npc.id === 'ustaz_hidayat' ||
+    npc.id === 'abah_karta' ||
+    npc.id === 'pak_rt_dedi' ||
+    npc.id === 'aki_jaya';
+
+  const appropriateOpt: GreetingOption =
+    npc.id === 'ustaz_hidayat'
+      ? {
+          id: 'polite_sunda',
+          text: `Assalamualaikum, punten wilujeng ${timeSu} Pak Ustaz. Kumaha damang?`,
+          textId: `Assalamualaikum, permisi selamat ${timeId} Pak Ustaz. Bagaimana kabarnya?`,
+          isAppropriate: true,
+          bonusPoints: 6,
+          npcReaction: 'Waalaikumsalam Jang Arga, alhamdulillah pangéstu. Sopan pisan anjeun mah!',
+          npcReactionId: 'Waalaikumsalam Nak Arga, alhamdulillah baik. Kamu sopan sekali!',
+          feedbackLabel: '+6 Poin Bahasa Sunda Lemes & Adab Tepat Waktu',
+        }
+      : isElderOrReligious
+      ? {
+          id: 'polite_sunda',
+          text: `Punten, sampurasun ${npc.name}. Wilujeng ${timeSu}, kumaha damang?`,
+          textId: `Permisi, sampurasun ${npc.name}. Selamat ${timeId}, bagaimana kabarnya?`,
+          isAppropriate: true,
+          bonusPoints: 6,
+          npcReaction: 'Rampés Jang Arga! Alhamdulillah damang, resep ningali budak ngora nu tata krama.',
+          npcReactionId: 'Rampes Nak Arga! Alhamdulillah sehat, senang melihat anak muda bertata krama.',
+          feedbackLabel: '+6 Poin Bahasa Sunda Lemes & Tata Krama',
+        }
+      : {
+          id: 'polite_sunda',
+          text: `Sampurasun ${npc.name}! Wilujeng ${timeSu}, mugia séhat salawasna.`,
+          textId: `Permisi ${npc.name}! Selamat ${timeId}, semoga sehat selalu.`,
+          isAppropriate: true,
+          bonusPoints: 6,
+          npcReaction: 'Rampés Arga! Wah ramah pisan euy salamna, nuhun pisan!',
+          npcReactionId: 'Rampes Arga! Wah ramah sekali salamnya, terima kasih banyak!',
+          feedbackLabel: '+6 Poin Bahasa Sunda Akrab & Sopan',
+        };
+
+  const casualMismatchOpt: GreetingOption = isElderOrReligious
+    ? {
+        id: 'casual_slang',
+        text: `Eh ${npc.name}, lagi santai aja nih? Gimana kabarnya bro?`,
+        textId: `Eh ${npc.name}, lagi santai saja nih? Bagaimana kabarnya bro?`,
+        isAppropriate: false,
+        bonusPoints: 0,
+        npcReaction: 'Eh muhun Jang... mugia tetep diajar tata krama nyarios ka kolot nya.',
+        npcReactionId: 'Eh iya Nak... semoga tetap belajar tata krama berbicara kepada yang lebih tua ya.',
+        feedbackLabel: 'Bahasa santai kurang pas untuk sesepuh (+0 Poin Bonus)',
+      }
+    : {
+        id: 'casual_slang',
+        text: `Woy ${npc.name}, tumben nongkrong di sini, lagi gabut ya?`,
+        textId: `Hei ${npc.name}, tumben nongkrong di sini, lagi bosan ya?`,
+        isAppropriate: false,
+        bonusPoints: 0,
+        npcReaction: 'Heh si Arga meni kasar kitu nyariosna, tapi nya teu nanaon lah.',
+        npcReactionId: 'Heh si Arga agak kasar bicaranya, tapi ya sudahlah.',
+        feedbackLabel: 'Bahasa gaul kurang sopan dalam adat Sunda (+0 Poin Bonus)',
+      };
+
+  const wrongTimeOrRudeOpt: GreetingOption = {
+    id: 'wrong_time',
+    text: `Wilujeng ${wrongTimeSu} ${npc.name}! Permisi, minggir heula sakedap.`,
+    textId: `Selamat ${wrongTimeId} ${npc.name}! Permisi, minggir sebentar.`,
+    isAppropriate: false,
+    bonusPoints: 0,
+    npcReaction: `Ayeuna mah tos ${timeId} atuh Arga, sanés ${wrongTimeId}... tong rusuh teuing!`,
+    npcReactionId: `Sekarang sudah ${timeId} Arga, bukan ${wrongTimeId}... jangan terlalu terburu-buru!`,
+    feedbackLabel: `Salam kurang sesuai waktu (sekarang ${timeId}) (+0 Poin Bonus)`,
+  };
+
+  // Deterministic rotation per NPC + time bucket so correct answer position varies naturally
+  const seed = (npc.name.length + Math.floor(hour)) % 3;
+  const list = [appropriateOpt, casualMismatchOpt, wrongTimeOrRudeOpt];
+  return [list[seed], list[(seed + 1) % 3], list[(seed + 2) % 3]];
+}
+
 export const DEFAULT_SETTINGS: GameSettings = {
   musicVolume: 75,
   sfxVolume: 85,
@@ -315,13 +543,26 @@ export function formatGameTime(minutesOfDay: number): string {
 }
 
 const HARI_NAMES = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU', 'MINGGU'];
-const BULAN_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN'];
+const BULAN_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES'];
+const BULAN_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 export function formatGameDate(day: number): string {
-  const hari = HARI_NAMES[(day - 1) % 7];
-  const tanggal = ((day - 1) % 28) + 1;
-  const bulan = BULAN_NAMES[Math.floor((day - 1) / 28) % BULAN_NAMES.length];
-  return `${hari}, ${tanggal} ${bulan}`;
+  const safeDay = Math.max(1, Math.floor(Number.isFinite(day) ? day : 1));
+  const hari = HARI_NAMES[(safeDay - 1) % 7];
+
+  let remaining = safeDay - 1;
+  const year = Math.floor(remaining / 365) + 1;
+  remaining = remaining % 365;
+
+  let bulanIdx = 0;
+  while (bulanIdx < BULAN_DAYS.length - 1 && remaining >= BULAN_DAYS[bulanIdx]) {
+    remaining -= BULAN_DAYS[bulanIdx];
+    bulanIdx++;
+  }
+
+  const tanggal = remaining + 1;
+  const bulan = BULAN_NAMES[bulanIdx];
+  return year > 1 ? `${hari}, ${tanggal} ${bulan} (Thn ${year})` : `${hari}, ${tanggal} ${bulan}`;
 }
 
 export const SEASON_META: Record<
@@ -1285,7 +1526,7 @@ export const SCENES: Record<SceneId, SceneDef> = {
   rumah_kamar: {
     id: 'rumah_kamar',
     name: 'KAMAR ISTIRAHAT ARGA',
-    subtitle: 'Kasur Tidur (21.00 - 04.30) & Sajadah Sholat',
+    subtitle: 'Kasur Tidur (18.00 - 04.30) & Sajadah Sholat',
     bgImage: ASSETS.rumah_interior,
     bgPosition: '15% 55%',
     isIndoor: true,
@@ -1295,7 +1536,7 @@ export const SCENES: Record<SceneId, SceneDef> = {
       {
         id: 'bed_sleep',
         label: 'Tidur / Istirahat',
-        subtitle: 'Jam istirahat 21.00 - 04.30 WIB',
+        subtitle: 'Jam istirahat 18.00 - 04.30 WIB',
         x: 22,
         y: 52,
         actionType: 'sleep_bed',
@@ -2597,6 +2838,7 @@ export function createInitialGameState(slotId = 1): GameState {
     reputation: 3.4,
     wargaSatisfaction: 72,
     warungLevel: 1,
+    warungRenovationLevel: 0,
     rank: 1,
     scene: 'kampung_warung',
     playerPos: { x: 28, y: 58 },

@@ -327,6 +327,7 @@ export interface GameState {
   reputation: number; // 1.0..5.0
   wargaSatisfaction: number; // 0..100
   warungLevel: number;
+  warungRenovationLevel?: number; // 0=8 slot awal, 1=12 slot, 2=17 slot, 3=22 slot (semua barang)
   rank: number;
   scene: SceneId;
   playerPos: { x: number; y: number };

@@ -9,6 +9,10 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
+  Hammer,
+  Lock,
+  Sparkles,
+  Trophy,
 } from 'lucide-react';
 import {
   ASSETS,
@@ -16,9 +20,11 @@ import {
   ITEMS,
   ITEM_MAP,
   SEASON_META,
+  WARUNG_RENOVATION_TIERS,
   WEATHER_META,
   formatGameTime,
   formatRupiah,
+  getWarungRenovationInfo,
 } from '../data/gameData';
 import { CustomerOrder, GameSettings, GameState } from '../types/game';
 import { useUiGamepadAction } from '../hooks/useGamepad';
@@ -53,6 +59,7 @@ interface WarungInteriorViewProps {
   onFinishOrder: (order: CustomerOrder, success: boolean) => void;
   onVisitWarungAsih: () => void;
   onUpdatePrice: (itemId: string, newPrice: number) => void;
+  onRenovateWarung: () => void;
   onOpenDebtBook: () => void;
   onExitWarung: () => void;
 }
@@ -65,10 +72,11 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
   onFinishOrder,
   onVisitWarungAsih,
   onUpdatePrice,
+  onRenovateWarung,
   onOpenDebtBook,
   onExitWarung,
 }) => {
-  const [subTab, setSubTab] = useState<'layani' | 'stok' | 'harga'>('layani');
+  const [subTab, setSubTab] = useState<'layani' | 'stok' | 'harga' | 'renovasi'>('layani');
   const [currentOrder, setCurrentOrder] = useState<CustomerOrder | null>(null);
   const [statusNote, setStatusNote] = useState<string>('');
   const [waitState, setWaitState] = useState<{ remainingSec: number; progressPct: number } | null>(null);
@@ -76,6 +84,10 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
   const hour = gameState.minutesOfDay / 60;
   const withinOperatingHours = hour >= 9 && hour < 17;
   const warungItems = ITEMS.filter((i) => i.category === 'warung' || i.category === 'hasil_alam');
+  const renovationInfo = getWarungRenovationInfo(gameState);
+  const unlockedIdSet = new Set(renovationInfo.unlockedItemIds);
+  const unlockedWarungItems = warungItems.filter((i) => unlockedIdSet.has(i.id));
+  const lockedWarungItems = warungItems.filter((i) => !unlockedIdSet.has(i.id));
   const weatherMeta = WEATHER_META[gameState.weather];
   const seasonMeta = SEASON_META[gameState.season];
   const isRainyWeather = gameState.weather === 'hujan' || gameState.weather === 'gerimis';
@@ -123,9 +135,9 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
       buyerCooldownBySlot.delete(gameState.slotId);
       setWaitState(null);
 
-      // Sesuaikan permintaan pembeli dengan musim & cuaca (hujan -> jas hujan, payung, bandrek; terik -> es cendol, teh, caping)
+      // Sesuaikan permintaan pembeli dengan musim & cuaca (hanya dari slot etalase yang sudah terbuka!)
       const weightedPool: string[] = [];
-      for (const item of warungItems) {
+      for (const item of unlockedWarungItems) {
         const stock = gameState.inventory[item.id] ?? 0;
         if (stock <= 0) continue;
 
@@ -145,15 +157,18 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
         }
       }
 
-      // Saat hujan/musim hujan, sesekali warga tetap mencari Jas Hujan / Payung meski stok habis agar pemain terdorong kulakan
-      if (isRainyWeather && Math.random() < 0.35) {
+      // Saat hujan/musim hujan, sesekali warga tetap mencari Jas Hujan / Payung jika slotnya sudah terbuka
+      if (isRainyWeather && unlockedIdSet.has('jas_hujan') && Math.random() < 0.35) {
         weightedPool.push('jas_hujan', 'jas_hujan', 'payung_lipat', 'bandrek_hangat');
       }
 
+      const unlockedIds = unlockedWarungItems.map((it) => it.id);
+      const seasonalFallback = (isRainyWeather || isHujanSeason
+        ? ['jas_hujan', 'bandrek_hangat', 'kopi_kapal', 'mie_instan']
+        : ['es_cendol', 'teh_manis', 'kopi_kapal', 'gorengan']
+      ).filter((id) => unlockedIdSet.has(id));
       const fallbackPool =
-        isRainyWeather || isHujanSeason
-          ? ['jas_hujan', 'bandrek_hangat', 'kopi_kapal', 'mie_instan']
-          : ['es_cendol', 'teh_manis', 'kopi_kapal', 'gorengan'];
+        seasonalFallback.length > 0 ? seasonalFallback : unlockedIds.slice(0, 4);
       const pool = weightedPool.length > 0 ? weightedPool : fallbackPool;
 
       const arch = CUSTOMER_ARCHETYPES[Math.floor(Math.random() * CUSTOMER_ARCHETYPES.length)];
@@ -288,7 +303,7 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
 
   useUiGamepadAction((btn) => {
     if (btn === 'LB' || btn === 'RB') {
-      const tabs: ('layani' | 'stok' | 'harga')[] = ['layani', 'stok', 'harga'];
+      const tabs: ('layani' | 'stok' | 'harga' | 'renovasi')[] = ['layani', 'stok', 'harga', 'renovasi'];
       const curIdx = tabs.indexOf(subTab);
       const nextIdx = btn === 'RB' ? (curIdx + 1) % tabs.length : (curIdx + tabs.length - 1) % tabs.length;
       setSubTab(tabs[nextIdx]);
@@ -517,15 +532,34 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
 
             {/* Rak Dagangan Warung Arga (Right 7 cols) */}
             <div className="sm:col-span-7 bg-slate-950/90 border border-amber-400/60 rounded-2xl p-3 sm:p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display font-bold text-base text-amber-200">
-                  Rak &amp; Etalase Warung Arga ({settings.serveMode === 'klik' ? 'Klik Barang' : 'Klik / Seret'})
-                </h3>
-                <span className="text-xs text-slate-400">Kepuasan Warga: {gameState.wargaSatisfaction}%</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div>
+                  <h3 className="font-display font-bold text-base text-amber-200">
+                    Rak &amp; Etalase ({unlockedWarungItems.length}/{warungItems.length} Slot Aktif)
+                  </h3>
+                  <div className="text-[11px] text-slate-400">
+                    {renovationInfo.currentTier.name} · Kepuasan Warga: {gameState.wargaSatisfaction}%
+                  </div>
+                </div>
+                {renovationInfo.nextTier && (
+                  <button
+                    onClick={() => setSubTab('renovasi')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-colors ${
+                      renovationInfo.canRenovate
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-300 animate-pulse'
+                        : 'bg-slate-900 hover:bg-slate-800 text-amber-300 border-amber-400/50'
+                    }`}
+                  >
+                    <Hammer className="w-3.5 h-3.5" />
+                    <span>
+                      {renovationInfo.canRenovate ? 'Siap Renovasi!' : 'Buka Slot Baru'}
+                    </span>
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[250px] overflow-y-auto pr-1">
-                {warungItems.map((item) => {
+                {unlockedWarungItems.map((item) => {
                   const stock = gameState.inventory[item.id] ?? 0;
                   const price = gameState.customPrices[item.id] ?? item.retailPrice;
                   const isRequested = Boolean(currentOrder?.items.some((x) => x.itemId === item.id));
@@ -574,6 +608,24 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
                     </button>
                   );
                 })}
+
+                {lockedWarungItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSubTab('renovasi')}
+                    className="p-2.5 rounded-xl border border-dashed border-slate-700 bg-slate-950/75 hover:border-amber-400/50 text-left opacity-70 transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-lg grayscale">{item.emojiIcon}</span>
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-300">
+                        <Lock className="w-3 h-3" /> Terkunci
+                      </span>
+                    </div>
+                    <div className="text-xs font-bold truncate text-slate-400">{item.name}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Renovasi Warung</div>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -608,7 +660,7 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
               Harga terlalu mahal bisa membuat warga kurang puas; harga wajar menjaga reputasi!
             </p>
             <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-              {warungItems.map((it) => {
+              {unlockedWarungItems.map((it) => {
                 const curPrice = gameState.customPrices[it.id] ?? it.retailPrice;
                 return (
                   <div
@@ -640,6 +692,120 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
                         +500
                       </button>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Renovasi Warung (Buka Slot Barang Baru) */}
+        {subTab === 'renovasi' && (
+          <div className="w-full max-w-3xl bg-slate-950/92 border-2 border-amber-400/75 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-display text-lg sm:text-xl font-bold text-amber-200 flex items-center gap-2">
+                  <Hammer className="w-5 h-5 text-amber-400" />
+                  <span>Renovasi &amp; Perluas Etalase Warung</span>
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Perluas rak warung agar Arga bisa menjual lebih banyak jenis barang secara bersamaan. Terbuka jika Rank mencapai <strong className="text-emerald-300">Grandmaster / Legend</strong> atau saldo melampaui biaya renovasi.
+                </p>
+              </div>
+              <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-400/50 text-right">
+                <div className="text-[10px] text-slate-400 uppercase font-bold">Rank &amp; Saldo Arga</div>
+                <div className="text-xs font-bold text-amber-300 flex items-center justify-end gap-1">
+                  <Trophy className="w-3.5 h-3.5" />
+                  <span>{renovationInfo.rankInfo.fullLabel}</span>
+                </div>
+                <div className="font-mono-num text-xs font-bold text-emerald-300">
+                  {formatRupiah(gameState.money)}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-[245px] overflow-y-auto pr-1">
+              {WARUNG_RENOVATION_TIERS.map((tier) => {
+                const isDone = renovationInfo.currentLevel >= tier.level;
+                const isNext = renovationInfo.nextTier?.level === tier.level;
+                return (
+                  <div
+                    key={tier.level}
+                    className={`rounded-xl border p-3 transition-all ${
+                      isDone
+                        ? 'bg-emerald-950/40 border-emerald-500/60'
+                        : isNext
+                        ? 'bg-slate-900 border-amber-400 shadow-lg'
+                        : 'bg-slate-950/75 border-slate-800 opacity-75'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-400/50 text-amber-200 text-[10px] font-bold">
+                          Tahap {tier.level} · {tier.slotCount} Slot
+                        </span>
+                        <span className="font-display font-bold text-sm text-white">{tier.name}</span>
+                      </div>
+                      <span className="font-mono-num text-xs font-bold text-amber-300">
+                        {tier.cost === 0 ? 'Awal' : formatRupiah(tier.cost)}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-snug mb-2">{tier.description}</p>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap gap-1">
+                        {tier.unlockedItemIds.map((id) => {
+                          const it = ITEM_MAP[id];
+                          if (!it) return null;
+                          return (
+                            <span
+                              key={id}
+                              className="px-1.5 py-0.5 rounded bg-slate-950/80 border border-slate-700 text-[10px] text-slate-200"
+                            >
+                              {it.emojiIcon} {it.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+
+                      {isDone ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-300">
+                          <CheckCircle2 className="w-4 h-4" /> Sudah Aktif
+                        </span>
+                      ) : isNext ? (
+                        <button
+                          disabled={!renovationInfo.canRenovate}
+                          onClick={onRenovateWarung}
+                          className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-emerald-400 hover:brightness-105 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>
+                            {!renovationInfo.canAfford
+                              ? `Butuh ${formatRupiah(tier.cost)}`
+                              : !renovationInfo.meetsRank && !renovationInfo.moneyExceedsCost
+                              ? `Capai Rank ${tier.recommendedRanks[0]} / Saldo > Biaya`
+                              : `Renovasi Sekarang (${formatRupiah(tier.cost)})`}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-semibold">
+                          Selesaikan Tahap {tier.level - 1} dulu
+                        </span>
+                      )}
+                    </div>
+
+                    {isNext && (
+                      <div className="mt-2 pt-1.5 border-t border-slate-800 flex flex-wrap items-center gap-3 text-[10px]">
+                        <span className={renovationInfo.meetsRank ? 'text-emerald-300 font-bold' : 'text-slate-400'}>
+                          {renovationInfo.meetsRank ? '✓' : '○'} Rank: {tier.recommendedRanks[0]}+
+                        </span>
+                        <span className="text-slate-500">ATAU</span>
+                        <span className={renovationInfo.moneyExceedsCost ? 'text-emerald-300 font-bold' : 'text-slate-400'}>
+                          {renovationInfo.moneyExceedsCost ? '✓' : '○'} Uang Melampaui {formatRupiah(tier.cost)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -692,6 +858,20 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
         >
           <Tag className="w-4 h-4" />
           <span>Atur Harga</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('renovasi')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border ${
+            subTab === 'renovasi'
+              ? 'bg-amber-400 text-slate-950 border-amber-200'
+              : renovationInfo.canRenovate
+              ? 'bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 border-emerald-400'
+              : 'bg-slate-900 text-slate-200 border-slate-700'
+          }`}
+        >
+          <Hammer className="w-4 h-4" />
+          <span>Renovasi ({unlockedWarungItems.length}/{warungItems.length})</span>
         </button>
 
         <button

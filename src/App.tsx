@@ -40,6 +40,7 @@ import {
   formatGameTime,
   formatRupiah,
   getPlayerRankInfo,
+  getWarungRenovationInfo,
   rollInitialSeasonAndWeather,
   rollNextWeather,
 } from './data/gameData';
@@ -115,13 +116,20 @@ function readAllSaveSlots(): SaveSlotSummary[] {
         for (const it of ITEMS) {
           defaultPrices[it.id] = it.retailPrice;
         }
-        const fallbackWeather = rollInitialSeasonAndWeather(rawParsed.minutesOfDay ?? 450);
+        const safeDay = Math.max(1, Math.floor(Number(rawParsed.day) || 1));
+        const safeMinutesOfDay = Number.isFinite(rawParsed.minutesOfDay)
+          ? ((Math.floor(rawParsed.minutesOfDay) % 1440) + 1440) % 1440
+          : 450;
+        const fallbackWeather = rollInitialSeasonAndWeather(safeMinutesOfDay);
         const parsed: GameState = {
           ...rawParsed,
           slotId: i,
+          day: safeDay,
+          minutesOfDay: safeMinutesOfDay,
           playerName: 'Arga',
           warungName,
           customPrices: { ...defaultPrices, ...(rawParsed.customPrices ?? {}) },
+          warungRenovationLevel: rawParsed.warungRenovationLevel ?? 0,
           activityPoints: effectivePts,
           totalSideJobsCount: rawParsed.totalSideJobsCount ?? 0,
           totalGreetingsCount: rawParsed.totalGreetingsCount ?? 0,
@@ -134,7 +142,7 @@ function readAllSaveSlots(): SaveSlotSummary[] {
               ? rawParsed.weatherRemainingMin
               : fallbackWeather.weatherRemainingMin,
           weatherForecast: ensureWeatherForecast(
-            rawParsed.day ?? 1,
+            safeDay,
             rawParsed.season ?? fallbackWeather.season,
             rawParsed.weather ?? fallbackWeather.weather,
             rawParsed.weatherForecast
@@ -143,7 +151,7 @@ function readAllSaveSlots(): SaveSlotSummary[] {
             ? rawParsed.transactions.slice(0, 10)
             : [],
           dailyMissions: ensureDailyMissions(
-            rawParsed.day ?? 1,
+            safeDay,
             rawParsed.dailyMissions,
             rawParsed.greetedNpcsToday?.length ?? 0,
             rawParsed.prayedToday?.length ?? 0
@@ -173,11 +181,11 @@ function advanceClockState(
   prev: GameState,
   deltaMinutes: number
 ): { next: GameState; autoClosedToast: string | null; weatherToast: string | null } {
-  const rawMin = prev.minutesOfDay + deltaMinutes;
+  const rawMin = (Number.isFinite(prev.minutesOfDay) ? prev.minutesOfDay : 450) + deltaMinutes;
   const daysPassed = Math.floor(rawMin / 1440);
   const nextMin = ((rawMin % 1440) + 1440) % 1440;
 
-  let nextDay = prev.day;
+  let nextDay = Math.max(1, Math.floor(Number(prev.day) || 1));
   let nextPrayed = prev.prayedToday;
   let nextReminded = prev.remindedPrayersToday;
   let nextJobs = prev.completedJobsToday;
@@ -428,14 +436,15 @@ export default function App() {
         }
       }
 
-      // Tradition Day Check (triggered morning ~08:15 on tradition day)
+      // Tradition Day Check (triggered morning 08:15–11:00 on tradition day)
       const matchingTradition = TRADITIONS.find(
         (t) => t.dayTrigger === ((nextDay - 1) % 12) + 1 && !advanced.paidTraditions.includes(`${t.id}_d${nextDay}`)
       );
       const shouldOpenTradition =
         !triggeredPrayer &&
         matchingTradition &&
-        nextMin === 8 * 60 + 15 &&
+        nextMin >= 8 * 60 + 15 &&
+        nextMin <= 11 * 60 &&
         advanced.activeTradition !== matchingTradition.id;
 
       setGameState((curr) => {
@@ -453,20 +462,22 @@ export default function App() {
         };
       });
 
-      if (autoClosedToast) {
+      if (advanced.day > prev.day) {
+        setToastMsg(`🌅 Hari baru! Sekarang ${formatGameDate(advanced.day)} (Hari ke-${advanced.day}).`);
+      } else if (autoClosedToast) {
         setToastMsg(autoClosedToast);
       } else if (weatherToast) {
         setToastMsg(weatherToast);
       }
       if (triggeredPrayer) {
-        soundEngine.prayerBell();
+        soundEngine.playAdzan();
         setActivePrayerAlert(triggeredPrayer);
         setActiveModal('PRAYER_REMINDER');
       } else if (shouldOpenTradition && matchingTradition) {
         setActiveTradition(matchingTradition);
         setActiveModal('TRADITION_EVENT');
       }
-    }, 1100);
+    }, 650);
 
     return () => clearInterval(timer);
   }, [screen, activeModal]);
@@ -533,6 +544,7 @@ export default function App() {
   };
 
   const handleExitToCover = useCallback(() => {
+    soundEngine.stopAdzan();
     soundEngine.click();
     saveGameToSlot(gameStateRef.current);
     setActiveModal(null);
@@ -672,18 +684,27 @@ export default function App() {
     setActiveModal('DIALOGUE');
   }, []);
 
-  const handleDialogueChoice = (opt: DialogueOption) => {
+  const handleDialogueChoice = (
+    opt: DialogueOption,
+    salamBonusPoints = 0,
+    salamAppropriate = false
+  ) => {
     if (opt.reputationDelta >= 0) soundEngine.confirm();
     else soundEngine.error();
 
+    const extraRep = salamAppropriate ? 0.02 : 0;
+    const ptsGain = (opt.tone === 'ramah' ? 8 : opt.tone === 'biasa' ? 5 : 2) + salamBonusPoints;
+
     setGameState((prev) => {
       const { next } = advanceClockState(prev, 5);
-      const nextRep = Math.max(1, Math.min(5, Number((next.reputation + opt.reputationDelta).toFixed(2))));
+      const nextRep = Math.max(
+        1,
+        Math.min(5, Number((next.reputation + opt.reputationDelta + extraRep).toFixed(2)))
+      );
       const nextSat = Math.max(10, Math.min(100, next.wargaSatisfaction + opt.satisfactionDelta));
       const npcId = activeNpc?.id;
       const greeted =
         npcId && !next.greetedNpcsToday.includes(npcId) ? [...next.greetedNpcsToday, npcId] : next.greetedNpcsToday;
-      const ptsGain = opt.tone === 'ramah' ? 8 : opt.tone === 'biasa' ? 5 : 2;
       return {
         ...next,
         reputation: nextRep,
@@ -699,6 +720,10 @@ export default function App() {
         ),
       };
     });
+
+    if (salamAppropriate && salamBonusPoints > 0) {
+      showToast(`Bahasa Sunda sopan & tepat! +${salamBonusPoints} Poin Etika Salam.`);
+    }
   };
 
   const handleVehicleCollision = useCallback((vehicleType: VehicleType) => {
@@ -760,6 +785,51 @@ export default function App() {
       warungOpen: !prev.warungOpen,
       warungCloseReason: !prev.warungOpen ? null : 'Ditutup sementara oleh Arga',
     }));
+  };
+
+  const handleRenovateWarung = () => {
+    const curr = gameStateRef.current;
+    const info = getWarungRenovationInfo(curr);
+    if (!info.nextTier) return;
+    if (!info.canAfford) {
+      soundEngine.error();
+      showToast(`Saldo kurang! Butuh ${formatRupiah(info.nextTier.cost)} untuk renovasi.`);
+      return;
+    }
+    if (!info.meetsRank && !info.moneyExceedsCost) {
+      soundEngine.error();
+      showToast(
+        `Syarat renovasi: capai Rank ${info.nextTier.recommendedRanks[0]} atau saldo melampaui ${formatRupiah(info.nextTier.cost)}.`
+      );
+      return;
+    }
+
+    const tier = info.nextTier;
+    soundEngine.angklungSuccess();
+    soundEngine.cash();
+    setGameState((prev) => {
+      const { next } = advanceClockState(prev, 25);
+      return {
+        ...next,
+        money: next.money - tier.cost,
+        warungRenovationLevel: tier.level,
+        warungLevel: Math.max(next.warungLevel, tier.level + 1),
+        reputation: Math.min(5, Number((next.reputation + 0.12).toFixed(2))),
+        activityPoints: computeEffectiveActivityPoints(prev) + 25,
+        transactions: appendTransaction(next.transactions, {
+          day: next.day,
+          minutesOfDay: next.minutesOfDay,
+          type: 'expense',
+          category: 'warung',
+          title: `Renovasi Warung (${tier.name})`,
+          detail: `Terbuka ${tier.slotCount} slot etalase barang`,
+          amount: tier.cost,
+        }),
+      };
+    });
+    showToast(
+      `Renovasi berhasil! ${tier.name} aktif dengan ${tier.slotCount} slot barang unik (+25 Poin)!`
+    );
   };
 
   const handleServeWarungItem = (_orderId: string, itemId: string) => {
@@ -880,14 +950,15 @@ export default function App() {
     showToast(`Nikmat! Arga menyantap ${def.name} di Warung Asih (+${def.energyRestore}% Energi, +4 Poin).`);
   };
 
-  const handleSleepAtHome = () => {
+  const handleSleepAtHome = (mode: 'auto' | 'nap' | 'next_day' = 'auto') => {
     const prev = gameStateRef.current;
     const hour = prev.minutesOfDay / 60;
-    const isSleepWindow = hour >= 21 || hour < 4.5;
+    const isSleepWindow = hour >= 18 || hour < 4.5;
+    const doFullSleep = mode === 'next_day' || (mode === 'auto' && (isSleepWindow || prev.isInjured));
     soundEngine.angklungSuccess();
 
-    if (isSleepWindow || prev.isInjured) {
-      const nextDay = hour >= 21 || (prev.isInjured && hour >= 4.5) ? prev.day + 1 : prev.day;
+    if (doFullSleep) {
+      const nextDay = hour >= 4.5 ? prev.day + 1 : prev.day;
       const rolling = ensureWeatherForecast(
         prev.day,
         prev.season,
@@ -931,17 +1002,17 @@ export default function App() {
       setGameState(nextState);
       saveGameToSlot(nextState);
       showToast(
-        `Selamat pagi! Jam 04.30 WIB · ${SEASON_META[nextSeason].label} (${WEATHER_META[morningWeather.weather].label}). Energi 100% (+12 Poin).`
+        `Selamat pagi, ${formatGameDate(nextDay)}! Jam 04.30 WIB · ${SEASON_META[nextSeason].label} (${WEATHER_META[morningWeather.weather].label}). Energi 100% (+12 Poin).`
       );
     } else {
       setGameState((curr) => {
-        const { next } = advanceClockState(curr, 60);
+        const { next } = advanceClockState(curr, 90);
         return {
           ...next,
           energy: Math.min(100, next.energy + 30),
         };
       });
-      showToast('Arga tidur siang sejenak (+30% Energi). Tidur malam dimulai pukul 21.00 WIB.');
+      showToast('Arga beristirahat sejenak (+1.5 Jam, +30% Energi). Tidur malam dimulai pukul 18.00 WIB.');
     }
   };
 
@@ -1247,7 +1318,10 @@ export default function App() {
           } else {
             setActiveModal(null);
             if (activeModal === 'DIALOGUE') setActiveNpc(null);
-            if (activeModal === 'PRAYER_REMINDER') setActivePrayerAlert(null);
+            if (activeModal === 'PRAYER_REMINDER') {
+              soundEngine.stopAdzan();
+              setActivePrayerAlert(null);
+            }
             if (activeModal === 'SIDE_JOB') setActiveSideJob(null);
           }
         } else if (
@@ -1325,7 +1399,7 @@ export default function App() {
 
   const currentSceneDef = SCENES[gameState.scene];
   const npcsInCurrentScene = useMemo(() => NPCS.filter((n) => n.scene === gameState.scene), [gameState.scene]);
-  const isSleepReminder = currentHour >= 21 || currentHour < 4.5;
+  const isSleepReminder = currentHour >= 18 || currentHour < 4.5;
 
   // Contextual environmental ambient loop (rain intensification, pasar bustle, river babble, village crickets)
   const ambientTimeBucket = Math.floor(gameState.minutesOfDay / 30);
@@ -1404,6 +1478,7 @@ export default function App() {
               customPrices: { ...prev.customPrices, [itemId]: newPrice },
             }))
           }
+          onRenovateWarung={handleRenovateWarung}
           onOpenDebtBook={() => setActiveModal('HP_PHONE')}
           onExitWarung={() => handleChangeScene('kampung_warung', { x: 28, y: 58 })}
         />
@@ -1504,7 +1579,7 @@ export default function App() {
               })()}
             </div>
             <div className="text-[10px] sm:text-[11px] font-bold text-amber-200 tracking-wide mt-0.5">
-              {formatGameDate(gameState.day)}
+              {formatGameDate(gameState.day)} · Hari ke-{gameState.day}
             </div>
             <div className="text-[9px] sm:text-[10px] font-extrabold text-sky-300 uppercase tracking-wider truncate max-w-[130px] sm:max-w-[190px]">
               {currentSceneDef.name}
@@ -1660,7 +1735,7 @@ export default function App() {
                 {isSleepReminder && (
                   <div className="p-2 rounded-lg bg-indigo-950/80 border border-indigo-400/60 text-indigo-200 flex items-start gap-1.5">
                     <MoonStar className="w-4 h-4 shrink-0 text-indigo-300 mt-0.5" />
-                    <span>Waktu istirahat (21.00–04.30). Pulang ke kamar untuk tidur!</span>
+                    <span>Waktu istirahat malam (18.00–04.30). Pulang ke kamar untuk tidur keesokan hari!</span>
                   </div>
                 )}
                 {gameState.isInjured && (
@@ -1881,6 +1956,7 @@ export default function App() {
       {activeModal === 'DIALOGUE' && activeNpc && (
         <DialogueModal
           npc={activeNpc}
+          minutesOfDay={gameState.minutesOfDay}
           onSelectOption={handleDialogueChoice}
           onClose={() => {
             setActiveModal(null);

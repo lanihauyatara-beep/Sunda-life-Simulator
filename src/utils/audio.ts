@@ -44,6 +44,8 @@ class SoundEngine {
   private ambientTickerId: number | null = null;
   private lastEnvState: EnvironmentAudioState | null = null;
   private isAudioUnlocked = false;
+  private adzanAudio: HTMLAudioElement | null = null;
+  private bedukTimerId: number | null = null;
 
   private ensureContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -262,6 +264,9 @@ class SoundEngine {
   }
 
   public syncVolumes() {
+    if (this.adzanAudio) {
+      this.adzanAudio.volume = Math.max(0, Math.min(1, this.sfxVolume));
+    }
     if (!this.ctx || !this.ambientMasterGain) return;
     const target = this.lastEnvState?.active ? this.ambientVolume : 0;
     this.ambientMasterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.12);
@@ -594,6 +599,141 @@ class SoundEngine {
     this.playTone(392, 0.35, 'sine', 0.14, 0);
     this.playTone(523.25, 0.4, 'sine', 0.12, 0.2);
     this.playTone(659.25, 0.55, 'sine', 0.14, 0.42);
+  }
+
+  private triggerSingleBedukHit(delay = 0, intensity = 1) {
+    if (this.sfxVolume <= 0.01) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const t0 = ctx.currentTime + delay;
+    const scale = Math.max(0.05, this.sfxVolume * intensity);
+
+    // 1. Deep cowhide drum membrane sub-bass punch (66 Hz -> 37 Hz)
+    const skinOsc = ctx.createOscillator();
+    skinOsc.type = 'sine';
+    skinOsc.frequency.setValueAtTime(72, t0);
+    skinOsc.frequency.exponentialRampToValueAtTime(37, t0 + 0.18);
+
+    const skinGain = ctx.createGain();
+    skinGain.gain.setValueAtTime(0.0001, t0);
+    skinGain.gain.linearRampToValueAtTime(0.55 * scale, t0 + 0.012);
+    skinGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.85);
+
+    // 2. Hollow wooden beduk cylinder body resonance (~116 Hz -> 94 Hz)
+    const bodyOsc = ctx.createOscillator();
+    bodyOsc.type = 'triangle';
+    bodyOsc.frequency.setValueAtTime(124, t0);
+    bodyOsc.frequency.exponentialRampToValueAtTime(92, t0 + 0.22);
+
+    const bodyFilter = ctx.createBiquadFilter();
+    bodyFilter.type = 'lowpass';
+    bodyFilter.frequency.setValueAtTime(280, t0);
+
+    const bodyGain = ctx.createGain();
+    bodyGain.gain.setValueAtTime(0.0001, t0);
+    bodyGain.gain.linearRampToValueAtTime(0.28 * scale, t0 + 0.01);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.55);
+
+    // 3. Soft wooden mallet thud transient
+    const noiseSrc = ctx.createBufferSource();
+    noiseSrc.buffer = this.getNoiseBuffer(ctx);
+    const malletFilter = ctx.createBiquadFilter();
+    malletFilter.type = 'bandpass';
+    malletFilter.frequency.setValueAtTime(240, t0);
+    malletFilter.Q.setValueAtTime(1.4, t0);
+    const malletGain = ctx.createGain();
+    malletGain.gain.setValueAtTime(0.0001, t0);
+    malletGain.gain.linearRampToValueAtTime(0.22 * scale, t0 + 0.008);
+    malletGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+
+    // Gentle mosque courtyard echo
+    const delayNode = ctx.createDelay(0.8);
+    delayNode.delayTime.setValueAtTime(0.22, t0);
+    const echoGain = ctx.createGain();
+    echoGain.gain.setValueAtTime(0.22, t0);
+
+    skinOsc.connect(skinGain);
+    bodyOsc.connect(bodyFilter);
+    bodyFilter.connect(bodyGain);
+    noiseSrc.connect(malletFilter);
+    malletFilter.connect(malletGain);
+
+    skinGain.connect(ctx.destination);
+    bodyGain.connect(ctx.destination);
+    malletGain.connect(ctx.destination);
+
+    skinGain.connect(delayNode);
+    bodyGain.connect(delayNode);
+    delayNode.connect(echoGain);
+    echoGain.connect(ctx.destination);
+
+    skinOsc.start(t0);
+    bodyOsc.start(t0);
+    noiseSrc.start(t0, 0.2);
+
+    skinOsc.stop(t0 + 0.9);
+    bodyOsc.stop(t0 + 0.6);
+    noiseSrc.stop(t0 + 0.18);
+  }
+
+  /**
+   * Authentic Indonesian/Sundanese mosque Beduk drum cadence ("DUG... DUG... DUG-DUG-DUG")
+   */
+  public playBeduk(fullCadence = true) {
+    if (this.sfxVolume <= 0.01) return;
+    this.triggerSingleBedukHit(0.0, 0.95);
+    this.triggerSingleBedukHit(0.55, 1.0);
+    if (fullCadence) {
+      this.triggerSingleBedukHit(1.1, 0.88);
+      this.triggerSingleBedukHit(1.36, 0.95);
+      this.triggerSingleBedukHit(1.62, 1.05);
+    }
+  }
+
+  public stopAdzan() {
+    if (this.bedukTimerId !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.bedukTimerId);
+      this.bedukTimerId = null;
+    }
+    if (this.adzanAudio) {
+      this.adzanAudio.pause();
+      this.adzanAudio.currentTime = 0;
+    }
+  }
+
+  /**
+   * Plays authentic Sunda mosque Beduk prelude followed by real recorded Adzan audio (/audio/adzan.mp3)
+   */
+  public playAdzan() {
+    if (this.sfxVolume <= 0.01 || typeof window === 'undefined') return;
+    this.stopAdzan();
+
+    // 1. Two resonant Beduk mosque beats as the traditional call prelude
+    this.playBeduk(false);
+
+    // 2. Real human-recited Adzan recording after the 2nd beduk resonance
+    this.bedukTimerId = window.setTimeout(() => {
+      this.bedukTimerId = null;
+      if (this.sfxVolume <= 0.01) return;
+      try {
+        if (!this.adzanAudio) {
+          this.adzanAudio = new Audio('/audio/adzan.mp3');
+          this.adzanAudio.preload = 'auto';
+        }
+        this.adzanAudio.currentTime = 0;
+        this.adzanAudio.volume = Math.max(0, Math.min(1, this.sfxVolume));
+        const p = this.adzanAudio.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(() => {
+            // If autoplay blocked, finish with warm beduk cadence so prayer cue is still clear
+            this.playBeduk(true);
+          });
+        }
+      } catch {
+        this.playBeduk(true);
+      }
+    }, 950);
   }
 
   public crash() {

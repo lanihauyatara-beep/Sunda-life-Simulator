@@ -17,6 +17,8 @@ import {
   ReceiptText,
   ArrowUpRight,
   ArrowDownLeft,
+  Volume2,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   PRAYER_SCHEDULE,
@@ -31,7 +33,9 @@ import {
   formatGameTime,
   formatRupiah,
   getForecastPlanningAdvice,
+  getGreetingOptionsForNpc,
   getPlayerRankInfo,
+  GreetingOption,
 } from '../data/gameData';
 import {
   DialogueOption,
@@ -44,26 +48,55 @@ import {
 } from '../types/game';
 import { useUiGamepadAction } from '../hooks/useGamepad';
 import { PortraitBadge } from './CharacterAvatar';
+import { soundEngine } from '../utils/audio';
 
 interface DialogueModalProps {
   npc: NpcDef;
-  onSelectOption: (opt: DialogueOption) => void;
+  minutesOfDay: number;
+  onSelectOption: (opt: DialogueOption, salamBonusPoints: number, salamAppropriate: boolean) => void;
   onClose: () => void;
 }
 
-export const DialogueModal: React.FC<DialogueModalProps> = ({ npc, onSelectOption, onClose }) => {
+export const DialogueModal: React.FC<DialogueModalProps> = ({
+  npc,
+  minutesOfDay,
+  onSelectOption,
+  onClose,
+}) => {
+  const [selectedGreeting, setSelectedGreeting] = useState<GreetingOption | null>(null);
   const [selectedReply, setSelectedReply] = useState<{ reply: string; replyId: string } | null>(null);
   const [impactMsg, setImpactMsg] = useState<string>('');
   const [focusedOpt, setFocusedOpt] = useState(0);
-  const greeting = npc.greetings[0];
-  const greetingId = npc.greetingsId[0] ?? '';
+
+  const greetingOptions = React.useMemo(
+    () => getGreetingOptionsForNpc(npc, minutesOfDay),
+    [npc, minutesOfDay]
+  );
+
+  const npcOpening = npc.greetings[0];
+  const npcOpeningId = npc.greetingsId[0] ?? '';
+
+  const handleChooseGreeting = (g: GreetingOption) => {
+    setSelectedGreeting(g);
+    setFocusedOpt(0);
+    if (g.isAppropriate) {
+      soundEngine.confirm();
+    } else {
+      soundEngine.click();
+    }
+  };
 
   const handleChoose = (opt: DialogueOption) => {
+    const salamPts = selectedGreeting?.bonusPoints ?? 0;
+    const salamOk = Boolean(selectedGreeting?.isAppropriate);
     setSelectedReply({ reply: opt.reply, replyId: opt.replyId });
     const repLabel = opt.reputationDelta >= 0 ? `+${opt.reputationDelta.toFixed(2)}` : opt.reputationDelta.toFixed(2);
     const satLabel = opt.satisfactionDelta >= 0 ? `+${opt.satisfactionDelta}%` : `${opt.satisfactionDelta}%`;
-    setImpactMsg(`Reputasi Warung ${repLabel} · Kepuasan Warga ${satLabel}`);
-    onSelectOption(opt);
+    const totalPts = (opt.tone === 'ramah' ? 8 : opt.tone === 'biasa' ? 5 : 2) + salamPts;
+    setImpactMsg(
+      `Reputasi Warung ${repLabel} · Kepuasan Warga ${satLabel} · +${totalPts} Poin Keaktifan`
+    );
+    onSelectOption(opt, salamPts, salamOk);
   };
 
   useUiGamepadAction((btn) => {
@@ -71,15 +104,32 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ npc, onSelectOptio
       if (btn === 'A' || btn === 'B') onClose();
       return;
     }
+    const activeListLen = !selectedGreeting ? greetingOptions.length : npc.options.length;
     if (btn === 'DPAD_DOWN' || btn === 'DPAD_RIGHT') {
-      setFocusedOpt((i) => (i + 1) % npc.options.length);
+      setFocusedOpt((i) => (i + 1) % activeListLen);
     } else if (btn === 'DPAD_UP' || btn === 'DPAD_LEFT') {
-      setFocusedOpt((i) => (i + npc.options.length - 1) % npc.options.length);
+      setFocusedOpt((i) => (i + activeListLen - 1) % activeListLen);
     } else if (btn === 'A') {
-      const opt = npc.options[focusedOpt];
-      if (opt) handleChoose(opt);
+      if (!selectedGreeting) {
+        const g = greetingOptions[focusedOpt];
+        if (g) handleChooseGreeting(g);
+      } else {
+        const opt = npc.options[focusedOpt];
+        if (opt) handleChoose(opt);
+      }
     }
   });
+
+  const bubbleMain = selectedReply
+    ? selectedReply.reply
+    : selectedGreeting
+    ? `${selectedGreeting.npcReaction} — ${npcOpening}`
+    : `${npc.name} menoleh menyambut kehadiran Arga...`;
+  const bubbleTrans = selectedReply
+    ? selectedReply.replyId
+    : selectedGreeting
+    ? `${selectedGreeting.npcReactionId} — ${npcOpeningId}`
+    : `Pilih salam pembuka berbahasa Sunda yang sopan sesuai waktu (${formatGameTime(minutesOfDay)} WIB).`;
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
@@ -93,26 +143,72 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ npc, onSelectOptio
             size="lg"
           />
           <div className="flex-1">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="font-display text-xl font-bold text-amber-300">{npc.name}</h3>
               <span className="text-xs text-slate-400">{npc.role}</span>
             </div>
             <div className="mt-2 bg-slate-950/85 border border-slate-800 rounded-xl p-3 space-y-1.5">
               <p className="text-sm font-medium text-amber-50 leading-relaxed">
-                "{selectedReply ? selectedReply.reply : greeting}"
+                "{bubbleMain}"
               </p>
               <p className="text-xs text-emerald-300/95 leading-relaxed border-t border-slate-800/80 pt-1.5">
-                <span className="font-bold text-emerald-400">Terjemahan:</span> "
-                {selectedReply ? selectedReply.replyId : greetingId}"
+                <span className="font-bold text-emerald-400">
+                  {selectedGreeting ? 'Terjemahan:' : 'Petunjuk:'}
+                </span>{' '}
+                "{bubbleTrans}"
               </p>
             </div>
-            {impactMsg && <div className="text-xs font-bold text-emerald-300 mt-2">{impactMsg}</div>}
+            {selectedGreeting && (
+              <div
+                className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                  selectedGreeting.isAppropriate
+                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
+                    : 'bg-amber-500/15 border-amber-400/50 text-amber-200'
+                }`}
+              >
+                {selectedGreeting.isAppropriate && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                <span>{selectedGreeting.feedbackLabel}</span>
+              </div>
+            )}
+            {impactMsg && <div className="text-xs font-bold text-emerald-300 mt-1.5">{impactMsg}</div>}
           </div>
         </div>
 
-        {!selectedReply ? (
+        {!selectedGreeting ? (
           <div className="space-y-2">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pilih Sapaan Arga [D-Pad + A]:</div>
+            <div className="flex items-center justify-between text-xs font-bold text-amber-300 uppercase tracking-wider">
+              <span>Langkah 1 · Ucapkan Salam Pembuka ({formatGameTime(minutesOfDay)} WIB)</span>
+              <span className="text-[10px] text-emerald-300 normal-case">Basa Sunda sopan = +6 Poin!</span>
+            </div>
+            {greetingOptions.map((g, idx) => (
+              <button
+                key={g.id}
+                onMouseEnter={() => setFocusedOpt(idx)}
+                onClick={() => handleChooseGreeting(g)}
+                className={`group w-full text-left px-4 py-3 rounded-xl border text-xs sm:text-sm font-semibold transition-colors ${
+                  focusedOpt === idx
+                    ? 'bg-amber-400 text-slate-950 border-white ally-focus'
+                    : 'bg-slate-950 hover:bg-amber-400 hover:text-slate-950 border-amber-400/50 text-amber-100'
+                }`}
+              >
+                <div>
+                  {idx + 1}. {g.text}
+                </div>
+                <div
+                  className={`text-[11px] font-normal mt-0.5 ${
+                    focusedOpt === idx ? 'text-amber-950' : 'text-emerald-300/90 group-hover:text-amber-950'
+                  }`}
+                >
+                  Arti: {g.textId}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : !selectedReply ? (
+          <div className="space-y-2">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Langkah 2 · Pilih Lanjutan Obrolan [D-Pad + A]:
+            </div>
             {npc.options.map((opt, idx) => (
               <button
                 key={idx}
@@ -166,19 +262,44 @@ export const PrayerReminderModal: React.FC<PrayerReminderModalProps> = ({
   const info = PRAYER_SCHEDULE.find((p) => p.name === prayerName);
 
   useUiGamepadAction((btn) => {
-    if (btn === 'A') onPrayNow('masjid');
+    if (btn === 'A') {
+      soundEngine.stopAdzan();
+      onPrayNow('masjid');
+    }
   });
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
       <div className="w-full max-w-lg bg-slate-900 border-2 border-emerald-400 rounded-2xl p-4 sm:p-6 shadow-[0_0_50px_rgba(16,185,129,0.25)] max-h-[94dvh] overflow-y-auto">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300">
-            <MoonStar className="w-6 h-6" />
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300">
+              <MoonStar className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-emerald-300 uppercase tracking-wider">Pengingat Waktu Sholat</div>
+              <h2 className="font-display text-2xl font-bold text-white">{info?.label ?? prayerName}</h2>
+            </div>
           </div>
-          <div>
-            <div className="text-xs font-bold text-emerald-300 uppercase tracking-wider">Pengingat Waktu Sholat</div>
-            <h2 className="font-display text-2xl font-bold text-white">{info?.label ?? prayerName}</h2>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                soundEngine.stopAdzan();
+                soundEngine.playBeduk(true);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/50 text-amber-200 text-[11px] font-bold flex items-center gap-1"
+            >
+              <span>🥁 Beduk</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => soundEngine.playAdzan()}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/50 text-emerald-200 text-[11px] font-bold flex items-center gap-1"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Adzan</span>
+            </button>
           </div>
         </div>
 
@@ -192,19 +313,28 @@ export const PrayerReminderModal: React.FC<PrayerReminderModalProps> = ({
 
         <div className="space-y-2.5">
           <button
-            onClick={() => onPrayNow('masjid')}
+            onClick={() => {
+              soundEngine.stopAdzan();
+              onPrayNow('masjid');
+            }}
             className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm"
           >
             Sholat Berjamaah di Masjid Al-Ikhlas (+Reputasi & +10% Energi)
           </button>
           <button
-            onClick={() => onPrayNow('rumah')}
+            onClick={() => {
+              soundEngine.stopAdzan();
+              onPrayNow('rumah');
+            }}
             className="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-200 border border-emerald-400/40 font-bold text-sm"
           >
             Sholat di Sajadah Rumah Arga (+8% Energi)
           </button>
           <button
-            onClick={onAcknowledgeCloseOnly}
+            onClick={() => {
+              soundEngine.stopAdzan();
+              onAcknowledgeCloseOnly();
+            }}
             className="w-full py-2.5 rounded-xl bg-slate-950 text-slate-400 hover:text-slate-200 text-xs font-semibold"
           >
             Tutup Warung Saja, Berangkat Jalan Kaki Sendiri [B]
@@ -1014,7 +1144,7 @@ export const ChangelogAndGuideModal: React.FC<{ onClose: () => void }> = ({ onCl
             <span className="inline-block px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-bold mr-2">PERINGKAT &amp; KERJA</span>
             Aktivitas berjualan, sapa warga, kerja sampingan Sunda, sholat, memancing, memetik buah &amp; tradisi menaikkan{' '}
             <strong>Peringkat Keaktifan</strong> dari <strong>Warrior → Elite → Master → Grandmaster → Epic → Legend → Mythic</strong>!
-            Jam istirahat tidur pukul <strong>21.00 – 04.30 WIB</strong>.
+            Jam istirahat tidur malam mulai pukul <strong>18.00 – 04.30 WIB</strong> (atau tidur kapan saja dari Kamar Istirahat).
           </div>
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
             <span className="inline-block px-2 py-0.5 rounded bg-sky-400 text-slate-950 font-bold mr-2">PASAR &amp; JALAN</span>

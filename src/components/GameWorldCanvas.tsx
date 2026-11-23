@@ -1035,36 +1035,63 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         </div>
       )}
 
-      {/* Scene Hotspots (Interactive Buildings & Activities) */}
+      {/* Scene Hotspots (Interactive Buildings & Activities — name/description appear only when Arga approaches) */}
       {!isPaused && scene.hotspots.map((hs) => {
-        const isNear = nearestHotspot?.id === hs.id;
+        const distToPlayer = Math.hypot(hs.x - renderPos.x, hs.y - renderPos.y);
+        const showLabel = distToPlayer < 17 || nearestHotspot?.id === hs.id;
+        const isNearest = nearestHotspot?.id === hs.id;
+
         return (
           <button
             key={hs.id}
+            aria-label={hs.label}
             onClick={(e) => {
               e.stopPropagation();
               onTriggerHotspot(hs);
             }}
             style={{ left: `${hs.x}%`, top: `${hs.y}%` }}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 group transition-transform ${
-              isNear ? 'scale-110' : 'hover:scale-105'
+            className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 group transition-all duration-200 ${
+              isNearest ? 'scale-110 z-20' : 'hover:scale-110'
             }`}
           >
-            <div
-              className={`px-3 py-1.5 rounded-lg border-2 shadow-xl backdrop-blur-sm transition-colors flex flex-col items-center ${
-                isNear
-                  ? 'bg-amber-400 text-slate-950 border-white'
-                  : 'bg-slate-950/85 text-amber-100 border-amber-400/75 hover:bg-slate-900'
-              }`}
-            >
-              <span className="text-xs font-bold whitespace-nowrap">{hs.label}</span>
-              {hs.subtitle && (
-                <span className={`text-[10px] whitespace-nowrap ${isNear ? 'text-amber-950 font-semibold' : 'text-slate-300'}`}>
-                  {hs.subtitle}
-                </span>
+            {showLabel && (
+              <div
+                className={`mb-1 px-3 py-1.5 rounded-lg border-2 shadow-xl backdrop-blur-sm transition-all flex flex-col items-center ${
+                  isNearest
+                    ? 'bg-amber-400 text-slate-950 border-white'
+                    : 'bg-slate-950/90 text-amber-100 border-amber-400/80'
+                }`}
+              >
+                <span className="text-xs font-bold whitespace-nowrap">{hs.label}</span>
+                {hs.subtitle && (
+                  <span
+                    className={`text-[10px] whitespace-nowrap ${
+                      isNearest ? 'text-amber-950 font-semibold' : 'text-slate-300'
+                    }`}
+                  >
+                    {hs.subtitle}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Compact glowing location marker when far away, highlighted pin when close */}
+            <div className="relative flex items-center justify-center mx-auto">
+              {!showLabel && (
+                <span className="absolute w-6 h-6 rounded-full bg-amber-400/35 animate-ping pointer-events-none" />
               )}
+              <div
+                className={`rounded-full border-2 shadow-lg flex items-center justify-center transition-all ${
+                  isNearest
+                    ? 'w-4 h-4 bg-white border-amber-500 shadow-[0_0_12px_rgba(251,191,36,0.9)]'
+                    : showLabel
+                    ? 'w-3.5 h-3.5 bg-amber-400 border-slate-950'
+                    : 'w-4 h-4 bg-amber-400/90 border-slate-950 ring-2 ring-amber-300/60'
+                }`}
+              >
+                {!showLabel && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+              </div>
             </div>
-            <div className="w-3 h-3 rounded-full bg-amber-400 border-2 border-slate-950 mx-auto mt-1 shadow" />
           </button>
         );
       })}

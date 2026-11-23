@@ -1,6 +1,6 @@
 import React from 'react';
 import { BedDouble, Utensils, Sofa, DoorOpen, BookOpen, MoonStar } from 'lucide-react';
-import { ASSETS, formatGameTime, formatRupiah } from '../data/gameData';
+import { ASSETS, formatGameDate, formatGameTime, formatRupiah } from '../data/gameData';
 import { GameState, SceneId } from '../types/game';
 import { useUiGamepadAction } from '../hooks/useGamepad';
 import { CharacterSprite } from './CharacterAvatar';
@@ -8,7 +8,7 @@ import { CharacterSprite } from './CharacterAvatar';
 interface HomeInteriorViewProps {
   gameState: GameState;
   onChangeRoom: (room: SceneId) => void;
-  onSleep: () => void;
+  onSleep: (mode?: 'auto' | 'nap' | 'next_day') => void;
   onCookMeal: (mealType: 'kopi' | 'liwet') => void;
   onPrayAtHome: () => void;
   onOpenDebtBook: () => void;
@@ -25,7 +25,8 @@ export const HomeInteriorView: React.FC<HomeInteriorViewProps> = ({
   onExitHouse,
 }) => {
   const hour = gameState.minutesOfDay / 60;
-  const isSleepTime = hour >= 21 || hour < 4.5;
+  const isSleepTime = hour >= 18 || hour < 4.5;
+  const nextWakeDay = hour >= 4.5 ? gameState.day + 1 : gameState.day;
   const currentRoom = gameState.scene;
 
   const rooms: SceneId[] = ['rumah_ruang_tamu', 'rumah_dapur', 'rumah_kamar'];
@@ -181,23 +182,39 @@ export const HomeInteriorView: React.FC<HomeInteriorViewProps> = ({
 
           {currentRoom === 'rumah_kamar' && (
             <div>
-              <h2 className="font-display text-xl font-bold text-amber-200 mb-1">Kamar Istirahat & Sajadah</h2>
+              <h2 className="font-display text-xl font-bold text-amber-200 mb-1">Kamar Istirahat &amp; Sajadah</h2>
               <p className="text-xs text-slate-300 mb-4">
-                Waktu tidur malam normal: <strong>21.00 – 04.30 WIB</strong> (bangun pagi jam 04.30 dengan Energi 100%).
-                Sekarang pukul {formatGameTime(gameState.minutesOfDay)} WIB.
+                Sekarang <strong>{formatGameDate(gameState.day)}</strong> pukul{' '}
+                <strong>{formatGameTime(gameState.minutesOfDay)} WIB</strong>. Tidur malam mulai{' '}
+                <strong>18.00 – 04.30 WIB</strong> (bangun jam 04.30 dengan Energi 100%).
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <button
-                  onClick={onSleep}
-                  className={`p-3.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 border transition-colors ${
-                    isSleepTime || gameState.isInjured
-                      ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-200'
-                      : 'bg-slate-900 hover:bg-slate-800 text-amber-100 border-amber-400/40'
-                  }`}
-                >
-                  <BedDouble className="w-5 h-5" />
-                  <span>{isSleepTime ? 'Tidur Malam (→ 04.30)' : 'Istirahat Sebentar (+30%)'}</span>
-                </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {isSleepTime || gameState.isInjured ? (
+                  <button
+                    onClick={() => onSleep('next_day')}
+                    className="p-3.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 border transition-colors bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-200"
+                  >
+                    <BedDouble className="w-5 h-5" />
+                    <span>Tidur Malam (→ {formatGameDate(nextWakeDay)} · 04.30)</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => onSleep('nap')}
+                      className="p-3.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 border transition-colors bg-slate-900 hover:bg-slate-800 text-amber-100 border-amber-400/40"
+                    >
+                      <BedDouble className="w-5 h-5" />
+                      <span>Istirahat Sebentar (+1.5 Jam · +30% Energi)</span>
+                    </button>
+                    <button
+                      onClick={() => onSleep('next_day')}
+                      className="p-3.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 border transition-colors bg-amber-400/90 hover:bg-amber-300 text-slate-950 border-amber-200"
+                    >
+                      <MoonStar className="w-5 h-5" />
+                      <span>Tidur Sampai Besok (→ {formatGameDate(nextWakeDay)} · 04.30)</span>
+                    </button>
+                  </>
+                )}
 
                 <button
                   onClick={onPrayAtHome}
