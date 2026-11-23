@@ -22,6 +22,27 @@ import { CustomerOrder, GameSettings, GameState } from '../types/game';
 import { useUiGamepadAction } from '../hooks/useGamepad';
 import { PortraitBadge } from './CharacterAvatar';
 
+// Jeda kedatangan pembeli disimpan per slot agar tidak bisa di-reset hanya dengan keluar-masuk warung
+const buyerCooldownBySlot = new Map<number, { readyAt: number; totalMs: number }>();
+
+function computeBuyerDelayMs(
+  reputation: number,
+  satisfaction: number,
+  isInitialOpen: boolean
+): number {
+  if (isInitialOpen) {
+    // Jeda awal saat warung baru dibuka: 3 – 5 detik
+    return 3000 + Math.floor(Math.random() * 2000);
+  }
+  // Jeda antar pembeli: 8 – 15 detik (lebih ramai jika reputasi & kepuasan warga tinggi)
+  const popularityBonus = Math.min(
+    3000,
+    Math.max(0, (reputation - 2.5) * 800 + (satisfaction - 60) * 25)
+  );
+  const baseMs = 9500 - popularityBonus + Math.floor(Math.random() * 5500);
+  return Math.max(7000, Math.min(16000, Math.round(baseMs)));
+}
+
 interface WarungInteriorViewProps {
   gameState: GameState;
   settings: GameSettings;
@@ -48,21 +69,53 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
   const [subTab, setSubTab] = useState<'layani' | 'stok' | 'harga'>('layani');
   const [currentOrder, setCurrentOrder] = useState<CustomerOrder | null>(null);
   const [statusNote, setStatusNote] = useState<string>('');
+  const [waitState, setWaitState] = useState<{ remainingSec: number; progressPct: number } | null>(null);
 
   const hour = gameState.minutesOfDay / 60;
   const withinOperatingHours = hour >= 9 && hour < 17;
   const warungItems = ITEMS.filter((i) => i.category === 'warung' || i.category === 'hasil_alam');
 
-  // Spawn varied Sundanese customers while Warung Arga is OPEN!
+  const scheduleNextBuyerCooldown = (isInitialOpen: boolean) => {
+    const delayMs = computeBuyerDelayMs(
+      gameState.reputation,
+      gameState.wargaSatisfaction,
+      isInitialOpen
+    );
+    buyerCooldownBySlot.set(gameState.slotId, {
+      readyAt: Date.now() + delayMs,
+      totalMs: delayMs,
+    });
+  };
+
+  // Spawn varied Sundanese customers with realistic cooldown ("jeda waktu") while Warung Arga is OPEN!
   useEffect(() => {
     if (!gameState.warungOpen || !withinOperatingHours) {
       setCurrentOrder(null);
+      setWaitState(null);
+      buyerCooldownBySlot.delete(gameState.slotId);
       return;
     }
 
-    if (currentOrder) return;
+    if (currentOrder) {
+      setWaitState(null);
+      return;
+    }
 
-    const timer = setTimeout(() => {
+    let entry = buyerCooldownBySlot.get(gameState.slotId);
+    if (!entry) {
+      const delayMs = computeBuyerDelayMs(
+        gameState.reputation,
+        gameState.wargaSatisfaction,
+        true
+      );
+      entry = { readyAt: Date.now() + delayMs, totalMs: delayMs };
+      buyerCooldownBySlot.set(gameState.slotId, entry);
+    }
+
+    const spawnCustomer = () => {
+      buyerCooldownBySlot.delete(gameState.slotId);
+      setWaitState(null);
+
       const availableIds = warungItems
         .filter((i) => (gameState.inventory[i.id] ?? 0) > 0)
         .map((i) => i.id);
@@ -92,10 +145,39 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
         patience: 100,
         maxPatience: 100,
       });
-    }, 1100);
+    };
 
-    return () => clearTimeout(timer);
-  }, [gameState.warungOpen, withinOperatingHours, currentOrder?.id]);
+    const tickWait = () => {
+      const activeEntry = buyerCooldownBySlot.get(gameState.slotId);
+      if (!activeEntry) {
+        spawnCustomer();
+        return true;
+      }
+      const remainingMs = Math.max(0, activeEntry.readyAt - Date.now());
+      if (remainingMs <= 0) {
+        spawnCustomer();
+        return true;
+      }
+      setWaitState({
+        remainingSec: Math.ceil(remainingMs / 1000),
+        progressPct: Math.min(
+          100,
+          Math.max(0, ((activeEntry.totalMs - remainingMs) / activeEntry.totalMs) * 100)
+        ),
+      });
+      return false;
+    };
+
+    if (tickWait()) return;
+
+    const interval = setInterval(() => {
+      if (tickWait()) {
+        clearInterval(interval);
+      }
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [gameState.warungOpen, gameState.slotId, withinOperatingHours, currentOrder?.id]);
 
   // Customer patience countdown
   useEffect(() => {
@@ -112,7 +194,9 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
   useEffect(() => {
     if (currentOrder && currentOrder.patience <= 0) {
       const expired = currentOrder;
+      scheduleNextBuyerCooldown(false);
       setCurrentOrder(null);
+      setStatusNote(`${expired.customerName} pergi. Menunggu jeda pembeli berikutnya...`);
       onFinishOrder(expired, false);
     }
   }, [currentOrder?.patience, currentOrder?.id]);
@@ -140,8 +224,9 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
 
     if (isComplete) {
       const completedOrder = { ...currentOrder, fulfilled: updatedFulfilled };
+      scheduleNextBuyerCooldown(false);
       setCurrentOrder(null);
-      setStatusNote(`Pesanan ${completedOrder.customerName} selesai!`);
+      setStatusNote(`Pesanan ${completedOrder.customerName} selesai! Jeda sebelum pembeli berikutnya...`);
       onFinishOrder(completedOrder, true);
     } else {
       setCurrentOrder({ ...currentOrder, fulfilled: updatedFulfilled });
@@ -265,8 +350,29 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
                 </div>
               ) : !currentOrder ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                  <div className="w-12 h-12 rounded-full border-2 border-amber-400/50 border-t-amber-400 animate-spin mb-3" />
-                  <p className="text-sm font-semibold text-amber-100">Menunggu warga belanja ke Warung Arga...</p>
+                  <div className="w-12 h-12 rounded-full bg-amber-400/15 border-2 border-amber-400/60 flex items-center justify-center text-amber-300 mb-3 animate-pulse">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <p className="text-sm font-bold text-amber-100">Jeda Antar Pembeli</p>
+                  <p className="text-xs text-slate-300 mt-1">
+                    Menunggu warga kampung mampir ke Warung Arga...
+                  </p>
+                  {waitState && (
+                    <div className="w-full max-w-[240px] mt-3 space-y-1.5">
+                      <div className="inline-block px-3 py-1 rounded-lg bg-slate-900 border border-amber-400/40 text-xs font-mono-num font-bold text-amber-300">
+                        Estimasi tiba: ~{waitState.remainingSec} detik
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          style={{ width: `${waitState.progressPct}%` }}
+                          className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-200"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-slate-400 mt-3 max-w-[260px] leading-relaxed">
+                    Manfaatkan waktu jeda untuk cek Stok, Atur Harga, atau mampir ngopi di Warung Asih.
+                  </p>
                 </div>
               ) : (
                 <div>
