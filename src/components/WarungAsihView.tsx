@@ -45,8 +45,8 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/92 via-slate-950/35 to-slate-950/65" />
 
       {/* Main Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pt-20 pb-24 overflow-y-auto">
-        <div className="w-full max-w-4xl bg-slate-950/90 border-2 border-amber-400/75 rounded-2xl p-5 shadow-2xl space-y-4">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-start sm:justify-center px-3 sm:px-4 pt-14 sm:pt-20 pb-3 sm:pb-6 overflow-y-auto">
+        <div className="w-full max-w-4xl bg-slate-950/90 border-2 border-amber-400/75 rounded-2xl p-3.5 sm:p-5 shadow-2xl space-y-3 sm:space-y-4">
           {/* Teh Asih Welcome Header with Sundanese & Indonesian Translation */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
             <div className="flex items-center gap-3.5">
@@ -85,7 +85,7 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
           </div>
 
           {/* Menu Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {menuItems.map((menu, idx) => {
               const disabled = gameState.money < menu.retailPrice || gameState.energy >= 100;
               const isFocused = focusedIdx === idx;

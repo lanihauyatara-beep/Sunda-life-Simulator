@@ -187,7 +187,7 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/35 to-slate-950/65" />
 
       {/* Center Interactive Zone */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pt-20 pb-24 overflow-y-auto">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-start sm:justify-center px-3 sm:px-4 pt-14 sm:pt-20 pb-3 sm:pb-6 overflow-y-auto">
         {/* Warung Arga Status Banner */}
         <div className="w-full max-w-4xl bg-slate-950/90 border-2 border-amber-400/75 rounded-2xl p-4 mb-4 shadow-2xl flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -236,7 +236,7 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
 
         {/* Sub-panels */}
         {subTab === 'layani' && (
-          <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4">
             {/* Customer Slot (Left 5 cols) — also accepts Drag & Drop when Serve Mode = Seret */}
             <div
               onDragOver={(e) => {
@@ -251,7 +251,7 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
                   if (itemId) handleGiveItem(itemId);
                 }
               }}
-              className="lg:col-span-5 bg-slate-950/90 border border-amber-400/60 rounded-2xl p-4 flex flex-col justify-between min-h-[270px]"
+              className="sm:col-span-5 bg-slate-950/90 border border-amber-400/60 rounded-2xl p-3 sm:p-4 flex flex-col justify-between min-h-[210px] sm:min-h-[270px]"
             >
               {!gameState.warungOpen ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
@@ -351,7 +351,7 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
             </div>
 
             {/* Rak Dagangan Warung Arga (Right 7 cols) */}
-            <div className="lg:col-span-7 bg-slate-950/90 border border-amber-400/60 rounded-2xl p-4">
+            <div className="sm:col-span-7 bg-slate-950/90 border border-amber-400/60 rounded-2xl p-3 sm:p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-display font-bold text-base text-amber-200">
                   Rak &amp; Etalase Warung Arga ({settings.serveMode === 'klik' ? 'Klik Barang' : 'Klik / Seret'})

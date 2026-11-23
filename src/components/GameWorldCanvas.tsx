@@ -605,12 +605,12 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
       {!isPaused && scene.neighbors.map((nb) => {
         const posClass =
           nb.direction === 'Kiri'
-            ? 'left-4 top-1/2 -translate-y-1/2'
+            ? 'left-2 sm:left-4 top-1/2 -translate-y-1/2'
             : nb.direction === 'Kanan'
-            ? 'right-4 top-1/2 -translate-y-1/2'
+            ? 'right-2 sm:right-4 top-1/2 -translate-y-1/2'
             : nb.direction === 'Atas'
-            ? 'top-24 left-1/2 -translate-x-1/2'
-            : 'bottom-20 left-1/2 -translate-x-1/2';
+            ? 'top-14 sm:top-24 left-1/2 -translate-x-1/2'
+            : 'bottom-14 sm:bottom-20 left-1/2 -translate-x-1/2';
 
         return (
           <button
@@ -619,7 +619,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
               e.stopPropagation();
               onChangeScene(nb.scene);
             }}
-            className={`absolute ${posClass} z-20 px-3 py-2 rounded-xl bg-slate-950/85 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/70 text-xs font-bold flex items-center gap-1.5 shadow-xl transition-colors`}
+            className={`absolute ${posClass} z-20 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-950/85 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/70 text-[11px] sm:text-xs font-bold flex items-center gap-1.5 shadow-xl transition-colors`}
           >
             <Navigation className="w-3.5 h-3.5" />
             <span>{nb.label}</span>
@@ -742,11 +742,11 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
             setJoyKnob({ x: 0, y: 0 });
             joyVecRef.current = { x: 0, y: 0 };
           }}
-          className="absolute bottom-5 left-5 z-30 w-28 h-28 rounded-full bg-slate-950/45 border-2 border-white/35 backdrop-blur-sm flex items-center justify-center touch-none cursor-grab active:cursor-grabbing"
+          className="absolute bottom-3 left-3 sm:bottom-5 sm:left-5 z-30 w-20 h-20 sm:w-28 sm:h-28 [@media(max-height:520px)]:w-20 [@media(max-height:520px)]:h-20 rounded-full bg-slate-950/45 border-2 border-white/35 backdrop-blur-sm flex items-center justify-center touch-none cursor-grab active:cursor-grabbing"
         >
           <div
             style={{ transform: `translate(${joyKnob.x}px, ${joyKnob.y}px)` }}
-            className="w-11 h-11 rounded-full bg-amber-100/90 border-2 border-amber-400 shadow-lg pointer-events-none"
+            className="w-8 h-8 sm:w-11 sm:h-11 [@media(max-height:520px)]:w-8 [@media(max-height:520px)]:h-8 rounded-full bg-amber-100/90 border-2 border-amber-400 shadow-lg pointer-events-none"
           />
         </div>
       )}

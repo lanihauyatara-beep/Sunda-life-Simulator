@@ -71,7 +71,7 @@ export const HomeInteriorView: React.FC<HomeInteriorViewProps> = ({
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/35 to-slate-950/60" />
 
       {/* Center Room Panel */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pt-20 pb-24">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-start sm:justify-center px-3 sm:px-4 pt-14 sm:pt-20 pb-3 sm:pb-6 overflow-y-auto">
         {/* Room Navigation Pills */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-5 bg-slate-950/85 p-1.5 rounded-xl border border-amber-400/50">
           <button

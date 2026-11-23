@@ -2,6 +2,7 @@ import React from 'react';
 import { Gamepad2, Sparkles } from 'lucide-react';
 import { ASSETS, formatRupiah } from '../data/gameData';
 import { SaveSlotSummary } from '../types/game';
+import { PWAInstallButton } from './PWAAndOrientationUI';
 
 interface CoverScreenProps {
   latestSlot: SaveSlotSummary | null;
@@ -23,28 +24,28 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({
   onOpenChangelog,
 }) => {
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 select-none">
+    <div className="relative w-screen h-[100dvh] overflow-y-auto overflow-x-hidden bg-slate-950 select-none">
       {/* Cover Artwork Matching Reference Layout with Pak GuruAI Mascot & Sunda Village */}
       <img
         src={ASSETS.cover}
         alt="Sunda Life Simulator bersama Arga dan Pak GuruAI"
         referrerPolicy="no-referrer"
-        className="absolute inset-0 w-full h-full object-cover object-center"
+        className="fixed inset-0 w-full h-full object-cover object-center pointer-events-none"
       />
 
       {/* Subtle left & bottom contrast gradient for clean UI readability */}
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/75 via-slate-950/20 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-transparent to-slate-950/25" />
+      <div className="fixed inset-0 bg-gradient-to-r from-slate-950/75 via-slate-950/20 to-transparent pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-to-t from-slate-950/75 via-transparent to-slate-950/25 pointer-events-none" />
 
       {/* LEFT COLUMN: Carved 3D Logo & Stacked Reference Menu Buttons */}
-      <div className="relative z-10 h-full max-w-7xl mx-auto px-6 md:px-12 py-6 flex flex-col justify-between">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between flex-1 gap-8">
-          <div className="w-full max-w-[360px] sm:max-w-[410px] flex flex-col items-stretch">
+      <div className="relative z-10 min-h-full max-w-7xl mx-auto px-4 sm:px-8 lg:px-12 py-3 sm:py-6 [@media(max-height:520px)]:py-2 flex flex-col justify-between gap-2">
+        <div className="flex flex-row items-center justify-between flex-1 gap-4 sm:gap-8">
+          <div className="w-[54%] max-w-[360px] sm:max-w-[410px] [@media(max-height:520px)]:max-w-[300px] flex flex-col items-stretch">
             {/* Aesthetic 3D Cartoon Wood + Gold Game Logo SVG (matching reference emblem) */}
-            <div className="mb-3 flex flex-col items-center sm:items-start">
+            <div className="mb-2 sm:mb-3 [@media(max-height:520px)]:mb-1.5 flex flex-col items-start">
               <svg
                 viewBox="0 0 460 278"
-                className="w-[300px] sm:w-[350px] h-auto drop-shadow-[0_14px_24px_rgba(0,0,0,0.65)] overflow-visible"
+                className="w-[210px] sm:w-[290px] lg:w-[345px] [@media(max-height:520px)]:w-[165px] h-auto drop-shadow-[0_14px_24px_rgba(0,0,0,0.65)] overflow-visible"
                 role="img"
                 aria-label="Sunda Life Simulator"
               >
@@ -269,23 +270,23 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({
                   <circle cx="-2.5" cy="62.5" r="2.5" fill="#ffffff" opacity="0.85" />
                 </g>
               </svg>
-              <div className="mt-1 text-xs font-bold text-amber-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+              <div className="mt-1 text-[10px] sm:text-xs font-bold text-amber-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] [@media(max-height:460px)]:hidden">
                 Petualangan Arga Mengelola Warung Arga &amp; Kampung Sunda
               </div>
             </div>
 
             {/* Stacked Action Buttons matching Reference Proportions */}
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-2 [@media(max-height:520px)]:gap-1.5">
               <button
                 onClick={onContinueOrStart}
-                className={`w-full px-6 py-3.5 rounded-2xl bg-gradient-to-b from-amber-300 via-amber-400 to-amber-500 text-slate-950 border-2 border-amber-200 shadow-[0_5px_0_#92400e,0_10px_22px_rgba(0,0,0,0.55)] active:translate-y-0.5 transition-all text-center ${
+                className={`w-full px-4 sm:px-6 py-2.5 sm:py-3.5 [@media(max-height:520px)]:py-1.5 rounded-xl sm:rounded-2xl bg-gradient-to-b from-amber-300 via-amber-400 to-amber-500 text-slate-950 border-2 border-amber-200 shadow-[0_4px_0_#92400e,0_10px_22px_rgba(0,0,0,0.55)] active:translate-y-0.5 transition-all text-center ${
                   focusedIndex === 0 ? 'ally-focus scale-[1.02]' : 'hover:brightness-105'
                 }`}
               >
-                <div className="font-display text-2xl sm:text-3xl font-extrabold tracking-wide leading-tight">
+                <div className="font-display text-lg sm:text-2xl lg:text-3xl [@media(max-height:520px)]:text-base font-extrabold tracking-wide leading-tight">
                   {latestSlot && !latestSlot.empty ? 'LANJUTKAN' : 'MULAI BERMAIN'}
                 </div>
-                <div className="text-[11px] font-bold text-amber-950 mt-0.5 tabular-nums truncate">
+                <div className="text-[10px] sm:text-[11px] font-bold text-amber-950 mt-0.5 tabular-nums truncate">
                   {latestSlot && !latestSlot.empty
                     ? `${latestSlot.warungName} · Hari ${latestSlot.day} · ${formatRupiah(latestSlot.money ?? 0)} · ${latestSlot.rankLabel ?? 'Warrior III'}`
                     : 'Warung Arga · Hari 1 · Rp 350.000 · Warrior III'}
@@ -294,63 +295,67 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({
 
               <button
                 onClick={onOpenLoadSave}
-                className={`w-full px-6 py-3.5 rounded-2xl bg-slate-900/95 border-2 border-amber-400/75 text-amber-50 shadow-[0_4px_0_#020617,0_8px_16px_rgba(0,0,0,0.5)] active:translate-y-0.5 transition-all text-center ${
+                className={`w-full px-4 sm:px-6 py-2.5 sm:py-3.5 [@media(max-height:520px)]:py-1.5 rounded-xl sm:rounded-2xl bg-slate-900/95 border-2 border-amber-400/75 text-amber-50 shadow-[0_4px_0_#020617,0_8px_16px_rgba(0,0,0,0.5)] active:translate-y-0.5 transition-all text-center ${
                   focusedIndex === 1 ? 'ally-focus bg-slate-800' : 'hover:bg-slate-800/95'
                 }`}
               >
-                <span className="font-display text-xl sm:text-2xl font-bold tracking-wider">
+                <span className="font-display text-base sm:text-xl lg:text-2xl [@media(max-height:520px)]:text-sm font-bold tracking-wider">
                   LOAD SAVE
                 </span>
               </button>
 
               <button
                 onClick={onOpenSettings}
-                className={`w-full px-6 py-3.5 rounded-2xl bg-slate-900/95 border-2 border-amber-400/75 text-amber-50 shadow-[0_4px_0_#020617,0_8px_16px_rgba(0,0,0,0.5)] active:translate-y-0.5 transition-all text-center ${
+                className={`w-full px-4 sm:px-6 py-2.5 sm:py-3.5 [@media(max-height:520px)]:py-1.5 rounded-xl sm:rounded-2xl bg-slate-900/95 border-2 border-amber-400/75 text-amber-50 shadow-[0_4px_0_#020617,0_8px_16px_rgba(0,0,0,0.5)] active:translate-y-0.5 transition-all text-center ${
                   focusedIndex === 2 ? 'ally-focus bg-slate-800' : 'hover:bg-slate-800/95'
                 }`}
               >
-                <span className="font-display text-xl sm:text-2xl font-bold tracking-wider">
+                <span className="font-display text-base sm:text-xl lg:text-2xl [@media(max-height:520px)]:text-sm font-bold tracking-wider">
                   PENGATURAN
                 </span>
               </button>
             </div>
           </div>
 
-          {/* RIGHT FOREGROUND OVERLAY: Pak GuruAI STUDIO Brand Lockup + Version + Yang Baru */}
-          <div className="self-end lg:self-end flex flex-col items-center text-center mb-4 lg:mb-10 lg:mr-10">
+          {/* RIGHT FOREGROUND OVERLAY: Pak GuruAI STUDIO Brand Lockup + Version + Yang Baru + Install */}
+          <div className="self-end flex flex-col items-center text-center mb-1 sm:mb-4 lg:mb-10 lg:mr-10 [@media(max-height:520px)]:mb-0">
             <div className="drop-shadow-[0_6px_14px_rgba(0,0,0,0.85)]">
-              <div className="font-display text-4xl sm:text-5xl font-black tracking-tight leading-none">
+              <div className="font-display text-2xl sm:text-4xl lg:text-5xl [@media(max-height:520px)]:text-2xl font-black tracking-tight leading-none">
                 <span className="text-white">Pak </span>
                 <span className="text-amber-400">GuruAI</span>
               </div>
-              <div className="text-xs sm:text-sm font-extrabold tracking-[0.42em] text-amber-100 uppercase mt-1">
+              <div className="text-[10px] sm:text-xs lg:text-sm font-extrabold tracking-[0.36em] sm:tracking-[0.42em] text-amber-100 uppercase mt-1">
                 S T U D I O
               </div>
             </div>
 
-            <div className="mt-2 text-xs font-bold text-slate-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
+            <div className="mt-1.5 sm:mt-2 text-[10px] sm:text-xs font-bold text-slate-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
               Versi 2.2 · Edisi Sunda Priangan
             </div>
 
-            <button
-              onClick={onOpenChangelog}
-              className={`mt-2 px-6 py-2 rounded-full bg-slate-900/90 border-2 border-amber-400/80 text-amber-200 text-xs sm:text-sm font-bold shadow-xl flex items-center gap-2 transition-all ${
-                focusedIndex === 3 ? 'ally-focus bg-slate-800 scale-105' : 'hover:bg-slate-800'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Yang Baru &amp; Panduan</span>
-            </button>
+            <div className="mt-2 flex flex-col sm:flex-row lg:flex-col items-center gap-1.5">
+              <button
+                onClick={onOpenChangelog}
+                className={`px-4 sm:px-6 py-1.5 sm:py-2 rounded-full bg-slate-900/90 border-2 border-amber-400/80 text-amber-200 text-xs sm:text-sm font-bold shadow-xl flex items-center gap-2 transition-all ${
+                  focusedIndex === 3 ? 'ally-focus bg-slate-800 scale-105' : 'hover:bg-slate-800'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Yang Baru &amp; Panduan</span>
+              </button>
+
+              <PWAInstallButton compact />
+            </div>
           </div>
         </div>
 
         {/* Clean Footer */}
-        <footer className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/15 text-xs text-slate-200">
+        <footer className="flex flex-wrap items-center justify-between gap-2 pt-1.5 sm:pt-2 border-t border-white/15 text-[11px] sm:text-xs text-slate-200">
           <div className="font-bold text-amber-300 drop-shadow">@copyright Pak GuruAI</div>
-          <div className="flex items-center gap-2 text-slate-200 bg-slate-950/70 px-3 py-1 rounded-lg border border-amber-400/35">
-            <Gamepad2 className="w-4 h-4 text-amber-400" />
-            <span>
-              ASUS ROG Ally: {gamepadConnected ? 'Kontroler Terhubung' : 'Siap Pakai'} · [A] Pilih · [B] Kembali
+          <div className="flex items-center gap-2 text-slate-200 bg-slate-950/70 px-2.5 py-1 rounded-lg border border-amber-400/35">
+            <Gamepad2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+            <span className="truncate max-w-[260px] sm:max-w-none">
+              ROG Ally &amp; Touch: {gamepadConnected ? 'Kontroler Terhubung' : 'Siap Pakai'} · Offline Ready
             </span>
           </div>
         </footer>

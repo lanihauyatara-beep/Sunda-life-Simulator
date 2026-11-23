@@ -23,8 +23,8 @@ export const SaveSlotsModal: React.FC<SaveSlotsModalProps> = ({
   onClose,
 }) => {
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl bg-slate-900 border-2 border-amber-400 rounded-2xl shadow-[0_0_50px_rgba(245,158,11,0.25)] p-6 md:p-8 max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-4xl bg-slate-900 border-2 border-amber-400 rounded-2xl shadow-[0_0_50px_rgba(245,158,11,0.25)] p-4 sm:p-6 md:p-8 max-h-[94dvh] overflow-y-auto">
         <div className="text-center mb-6">
           <h2 className="font-display text-2xl md:text-3xl font-bold text-amber-50">
             {onSaveCurrentToSlot ? 'Kelola & Pindah Slot Penyimpanan' : 'Load Save'}

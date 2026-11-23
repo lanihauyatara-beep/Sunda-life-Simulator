@@ -1,5 +1,6 @@
 import React from 'react';
 import { GameSettings } from '../types/game';
+import { PWAInstallButton } from './PWAAndOrientationUI';
 
 interface SettingsModalProps {
   settings: GameSettings;
@@ -15,8 +16,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
 }) => {
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="relative w-full max-w-4xl bg-slate-900 border-2 border-amber-400 rounded-2xl shadow-[0_0_50px_rgba(245,158,11,0.25)] p-5 md:p-7 max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="relative w-full max-w-4xl bg-slate-900 border-2 border-amber-400 rounded-2xl shadow-[0_0_50px_rgba(245,158,11,0.25)] p-4 sm:p-5 md:p-7 max-h-[94dvh] overflow-y-auto">
         <div className="flex justify-center mb-5">
           <div className="px-8 py-1.5 rounded-full bg-amber-400 text-slate-950 font-display font-bold text-lg shadow">
             Pengaturan
@@ -160,12 +161,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div>• [Y] / M: Buka Peta Kampung Sunda</div>
               </div>
             </div>
-            <button
-              onClick={onReplayTutorial}
-              className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm transition-colors"
-            >
-              Lihat Panduan Lengkap Bermain
-            </button>
+            <div className="space-y-2">
+              <div className="flex justify-center">
+                <PWAInstallButton />
+              </div>
+              <button
+                onClick={onReplayTutorial}
+                className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm transition-colors"
+              >
+                Lihat Panduan Lengkap Bermain
+              </button>
+            </div>
           </div>
         </div>
 

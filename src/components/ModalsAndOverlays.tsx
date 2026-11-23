@@ -70,9 +70,9 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ npc, onSelectOptio
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md flex items-end md:items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-5 shadow-2xl">
-        <div className="flex items-start gap-4 mb-4">
+    <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-3.5 sm:p-5 shadow-2xl max-h-[94dvh] overflow-y-auto">
+        <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
           <PortraitBadge
             name={npc.name}
             shirtColor={npc.shirtColor}
@@ -158,8 +158,8 @@ export const PrayerReminderModal: React.FC<PrayerReminderModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-slate-900 border-2 border-emerald-400 rounded-2xl p-6 shadow-[0_0_50px_rgba(16,185,129,0.25)]">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-lg bg-slate-900 border-2 border-emerald-400 rounded-2xl p-4 sm:p-6 shadow-[0_0_50px_rgba(16,185,129,0.25)] max-h-[94dvh] overflow-y-auto">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300">
             <MoonStar className="w-6 h-6" />
@@ -228,8 +228,8 @@ export const TraditionModal: React.FC<TraditionModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-slate-900 border-2 border-amber-400 rounded-2xl p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-lg bg-slate-900 border-2 border-amber-400 rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[94dvh] overflow-y-auto">
         <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider mb-1">
           <Sparkles className="w-4 h-4" />
           <span>Tradisi Budaya Sunda · Disampaikan {tradition.hostNpc}</span>
@@ -313,8 +313,8 @@ export const AccidentModal: React.FC<AccidentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-6 text-center">
-      <AlertTriangle className="w-14 h-14 text-amber-400 mb-4" />
+    <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4 sm:p-6 text-center overflow-y-auto">
+      <AlertTriangle className="w-11 h-11 sm:w-14 sm:h-14 text-amber-400 mb-3 sm:mb-4 shrink-0" />
       <h2 className="font-display text-2xl md:text-3xl font-bold text-amber-300 mb-4">
         Arga tertabrak {labels[vehicleType]} di jalan!
       </h2>
@@ -384,8 +384,8 @@ export const MapModal: React.FC<MapModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-3xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[94dvh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-display text-2xl font-bold text-amber-200 flex items-center gap-2">
@@ -482,14 +482,14 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-5 shadow-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-xl font-bold text-amber-200 flex items-center gap-2">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-3.5 sm:p-5 shadow-2xl max-h-[94dvh] flex flex-col">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
+          <h2 className="font-display text-lg sm:text-xl font-bold text-amber-200 flex items-center gap-2">
             <Smartphone className="w-5 h-5 text-amber-400" />
             HP Arga · AsihApp
           </h2>
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {[
               { id: 'keuangan' as const, label: 'Keuangan' },
               { id: 'ulasan' as const, label: 'Ulasan' },
@@ -739,8 +739,8 @@ export const ChangelogAndGuideModal: React.FC<{ onClose: () => void }> = ({ onCl
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-6 shadow-2xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[94dvh] flex flex-col">
         <div className="text-center mb-4">
           <h2 className="font-display text-2xl font-bold text-amber-200 flex items-center justify-center gap-2">
             <BookOpen className="w-6 h-6 text-amber-400" />

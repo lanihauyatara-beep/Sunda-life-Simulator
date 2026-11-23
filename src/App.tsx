@@ -67,6 +67,7 @@ import {
   PrayerReminderModal,
   TraditionModal,
 } from './components/ModalsAndOverlays';
+import { LandscapeOrientationGuard, OfflineNoticePill } from './components/PWAAndOrientationUI';
 
 const SLOT_STORAGE_PREFIX = 'sunda_life_sim_slot_';
 const ACTIVE_SLOT_STORAGE_KEY = 'sunda_life_sim_active_slot';
@@ -206,9 +207,13 @@ export default function App() {
     addedDebt: number;
   } | null>(null);
 
-  // HUD collapsible states & notifications
-  const [missionOpen, setMissionOpen] = useState(true);
-  const [jobsOpen, setJobsOpen] = useState(true);
+  // HUD collapsible states & notifications (auto-collapse sidebars on short HP landscape viewports)
+  const [missionOpen, setMissionOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerHeight >= 520 : true
+  );
+  const [jobsOpen, setJobsOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerHeight >= 520 : true
+  );
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [coverFocusIdx, setCoverFocusIdx] = useState(0);
   const [slotFocusIdx, setSlotFocusIdx] = useState(0);
@@ -996,6 +1001,8 @@ export default function App() {
   if (screen === 'COVER') {
     return (
       <>
+        <LandscapeOrientationGuard />
+        <OfflineNoticePill />
         <CoverScreen
           latestSlot={latestSlot}
           focusedIndex={coverFocusIdx}
@@ -1037,7 +1044,9 @@ export default function App() {
   }
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 select-none">
+    <div className="relative w-screen h-[100dvh] overflow-hidden bg-slate-950 select-none">
+      <LandscapeOrientationGuard />
+      <OfflineNoticePill />
       {/* Main Scene Switcher: Warung Arga vs Warung Asih vs Home Interior vs Outdoor World */}
       {gameState.scene === 'warung_interior' ? (
         <WarungInteriorView
@@ -1120,23 +1129,23 @@ export default function App() {
 
       {/* TOP GAMEPLAY HUD BAR (hidden when modal/dialogue is open for a clean view) */}
       {activeModal === null && (
-      <header className="absolute top-0 inset-x-0 z-30 bg-gradient-to-b from-slate-950/90 via-slate-950/65 to-transparent px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+      <header className="absolute top-0 inset-x-0 z-30 bg-gradient-to-b from-slate-950/90 via-slate-950/65 to-transparent px-2.5 sm:px-4 py-1.5 sm:py-2.5 [@media(max-height:520px)]:py-1 flex flex-wrap items-center justify-between gap-2 sm:gap-3 pointer-events-none">
         {/* Left: Clock, Date & Location */}
-        <div className="flex items-center gap-4 pointer-events-auto">
+        <div className="flex items-center gap-2.5 sm:gap-4 pointer-events-auto">
           <div>
-            <div className="font-mono-num text-2xl sm:text-3xl font-bold leading-none text-white drop-shadow">
+            <div className="font-mono-num text-lg sm:text-2xl lg:text-3xl [@media(max-height:520px)]:text-lg font-bold leading-none text-white drop-shadow">
               {formatGameTime(gameState.minutesOfDay)}
             </div>
-            <div className="text-[11px] font-bold text-amber-200 tracking-wide mt-0.5">
+            <div className="text-[10px] sm:text-[11px] font-bold text-amber-200 tracking-wide mt-0.5">
               {formatGameDate(gameState.day)}
             </div>
-            <div className="text-[10px] font-extrabold text-sky-300 uppercase tracking-wider truncate max-w-[190px]">
+            <div className="text-[9px] sm:text-[10px] font-extrabold text-sky-300 uppercase tracking-wider truncate max-w-[130px] sm:max-w-[190px]">
               {currentSceneDef.name}
             </div>
           </div>
 
           {/* Reputation Stars */}
-          <div className="hidden sm:block">
+          <div className="hidden lg:block">
             <div className="text-[10px] font-bold text-amber-300 tracking-wider uppercase">
               REPUTASI WARUNG
             </div>
@@ -1158,11 +1167,11 @@ export default function App() {
           </div>
 
           {/* Energy Meter */}
-          <div className="min-w-[110px]">
-            <div className="text-[10px] font-bold text-slate-200 tracking-wider uppercase font-mono-num">
+          <div className="min-w-[80px] sm:min-w-[110px]">
+            <div className="text-[9px] sm:text-[10px] font-bold text-slate-200 tracking-wider uppercase font-mono-num">
               ENERGI {Math.round(gameState.energy)}%
             </div>
-            <div className="w-28 h-2.5 rounded-full bg-slate-800 border border-slate-700 overflow-hidden mt-1">
+            <div className="w-20 sm:w-28 h-2 sm:h-2.5 rounded-full bg-slate-800 border border-slate-700 overflow-hidden mt-0.5 sm:mt-1">
               <div
                 style={{ width: `${Math.max(0, Math.min(100, gameState.energy))}%` }}
                 className={`h-full transition-all ${
@@ -1178,35 +1187,35 @@ export default function App() {
         </div>
 
         {/* Right: Money (Rupiah), Rank Tier, Map, Save, Slots, Settings */}
-        <div className="flex items-center gap-2 sm:gap-2.5 pointer-events-auto">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 pointer-events-auto">
           <button
             onClick={() => setActiveModal('HP_PHONE')}
             title="Klik untuk melihat detail peringkat keaktifan di HP Arga"
-            className={`hidden md:flex flex-col items-end px-2.5 py-1 rounded-xl border ${rankInfo.badgeBg} ${rankInfo.badgeBorder} hover:brightness-110 transition-all`}
+            className={`hidden sm:flex flex-col items-end px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-xl border ${rankInfo.badgeBg} ${rankInfo.badgeBorder} hover:brightness-110 transition-all`}
           >
-            <div className="text-[9px] font-bold text-slate-300 uppercase tracking-wider">
+            <div className="text-[8px] sm:text-[9px] font-bold text-slate-300 uppercase tracking-wider">
               PERINGKAT · {rankInfo.points} PTS
             </div>
-            <div className={`font-display text-xs sm:text-sm font-extrabold flex items-center gap-1 ${rankInfo.badgeText}`}>
-              <Trophy className="w-3.5 h-3.5" />
+            <div className={`font-display text-[11px] sm:text-sm font-extrabold flex items-center gap-1 ${rankInfo.badgeText}`}>
+              <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               {rankInfo.fullLabel}
             </div>
           </button>
 
           {/* Money Display in Real Rupiah */}
-          <div className="px-3.5 py-1.5 rounded-xl bg-slate-950/90 border-2 border-emerald-400/75 shadow-lg">
-            <div className="text-[10px] font-bold text-emerald-300 uppercase leading-none">Uang Arga</div>
-            <div className="font-mono-num text-base sm:text-lg font-extrabold text-emerald-400 leading-tight">
+          <div className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 [@media(max-height:520px)]:py-0.5 rounded-xl bg-slate-950/90 border-2 border-emerald-400/75 shadow-lg">
+            <div className="text-[8px] sm:text-[10px] font-bold text-emerald-300 uppercase leading-none">Uang Arga</div>
+            <div className="font-mono-num text-xs sm:text-base lg:text-lg font-extrabold text-emerald-400 leading-tight">
               {formatRupiah(gameState.money)}
             </div>
           </div>
 
           <button
             onClick={() => setActiveModal('MAP')}
-            className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg"
+            className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg"
           >
             <MapIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">Peta [Y]</span>
+            <span className="hidden md:inline">Peta [Y]</span>
           </button>
 
           <button
@@ -1216,7 +1225,7 @@ export default function App() {
               showToast(`Permainan tersimpan di Slot ${gameState.slotId}!`);
             }}
             title={`Simpan ke Slot ${gameState.slotId}`}
-            className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-400/60 text-amber-300 shadow"
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-400/60 text-amber-300 shadow"
           >
             <Save className="w-4 h-4" />
           </button>
@@ -1227,7 +1236,7 @@ export default function App() {
               setActiveModal('LOAD_SAVE');
             }}
             title="Kelola & Pindah Slot Save"
-            className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-400/60 text-amber-200 shadow"
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-400/60 text-amber-200 shadow"
           >
             <FolderOpen className="w-4 h-4" />
           </button>
@@ -1235,7 +1244,7 @@ export default function App() {
           <button
             onClick={() => setActiveModal('SETTINGS')}
             title="Pengaturan"
-            className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-400/60 text-amber-100 shadow"
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-400/60 text-amber-100 shadow"
           >
             <Menu className="w-4 h-4" />
           </button>
@@ -1245,10 +1254,10 @@ export default function App() {
 
       {/* LEFT FLOATING PANEL: AGENDA & MISI KAMPUNG */}
       {activeModal === null && gameState.scene !== 'warung_interior' && gameState.scene !== 'warung_asih' && (
-        <aside className="absolute top-20 left-3 z-20 w-60 sm:w-64 bg-slate-950/80 backdrop-blur-md border border-amber-400/45 rounded-xl shadow-2xl overflow-hidden">
+        <aside className="absolute top-14 sm:top-20 [@media(max-height:520px)]:top-12 left-2 sm:left-3 z-20 w-48 sm:w-60 lg:w-64 bg-slate-950/85 backdrop-blur-md border border-amber-400/45 rounded-xl shadow-2xl overflow-hidden">
           <button
             onClick={() => setMissionOpen((v) => !v)}
-            className="w-full px-3.5 py-2 flex items-center justify-between bg-slate-900/80 text-xs font-bold text-amber-300 border-b border-slate-800"
+            className="w-full px-3 py-1.5 sm:py-2 flex items-center justify-between bg-slate-900/80 text-[11px] sm:text-xs font-bold text-amber-300 border-b border-slate-800"
           >
             <span className="flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" /> AGENDA ARGA
@@ -1256,11 +1265,11 @@ export default function App() {
             {missionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
           {missionOpen && (
-            <div className="p-3 text-xs text-slate-200 space-y-2">
+            <div className="p-2.5 sm:p-3 text-[11px] sm:text-xs text-slate-200 space-y-1.5 sm:space-y-2 max-h-40 sm:max-h-60 overflow-y-auto">
               <div>
                 <span className="font-bold text-amber-200">Warung Arga (09.00–17.00):</span>{' '}
                 {currentHour >= 9 && currentHour < 17 ? (
-                  <span className="text-emerald-300 font-semibold">Jam Buka! Masuk & layani pembeli.</span>
+                  <span className="text-emerald-300 font-semibold">Jam Buka! Masuk &amp; layani pembeli.</span>
                 ) : (
                   <span className="text-slate-300">Tutup. Ambil kerja sampingan / ke Pasar / Warung Asih.</span>
                 )}
@@ -1277,7 +1286,7 @@ export default function App() {
                   <span>Kaki Arga masih pemulihan. Hati-hati menyeberang jalan!</span>
                 </div>
               )}
-              <div className="text-[11px] text-slate-400">
+              <div className="text-[10px] sm:text-[11px] text-slate-400">
                 Sapa warga hari ini: {gameState.greetedNpcsToday.length}/{NPCS.length} · Kepuasan:{' '}
                 {gameState.wargaSatisfaction}%
               </div>
@@ -1288,17 +1297,17 @@ export default function App() {
 
       {/* RIGHT FLOATING PANEL: KERJA SAMPINGAN TRADISIONAL SUNDA */}
       {activeModal === null && gameState.scene !== 'warung_interior' && gameState.scene !== 'warung_asih' && (
-        <aside className="hidden md:block absolute top-20 right-3 z-20 w-72 bg-slate-950/80 backdrop-blur-md border border-amber-400/45 rounded-xl shadow-2xl overflow-hidden">
+        <aside className="absolute top-14 sm:top-20 [@media(max-height:520px)]:top-12 right-2 sm:right-3 z-20 w-52 sm:w-64 lg:w-72 bg-slate-950/85 backdrop-blur-md border border-amber-400/45 rounded-xl shadow-2xl overflow-hidden">
           <button
             onClick={() => setJobsOpen((v) => !v)}
-            className="w-full px-3.5 py-2 flex items-center justify-between bg-slate-900/80 text-xs font-bold text-amber-300 border-b border-slate-800"
+            className="w-full px-3 py-1.5 sm:py-2 flex items-center justify-between bg-slate-900/80 text-[11px] sm:text-xs font-bold text-amber-300 border-b border-slate-800"
           >
             <span>KERJA SAMPINGAN SUNDA</span>
             {jobsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 
           {jobsOpen && (
-            <div className="p-2.5 space-y-2 max-h-64 overflow-y-auto">
+            <div className="p-2 sm:p-2.5 space-y-2 max-h-40 sm:max-h-64 overflow-y-auto">
               {visibleSideJobs.map((job) => {
                 const alreadyDone = gameState.completedJobsToday.includes(job.id);
                 const inWindow = currentHour >= job.startHour && currentHour < job.endHour;
@@ -1366,9 +1375,9 @@ export default function App() {
         gameState.scene !== 'rumah_ruang_tamu' &&
         gameState.scene !== 'rumah_dapur' &&
         gameState.scene !== 'rumah_kamar' && (
-          <div className="absolute bottom-5 right-5 z-30 flex items-end gap-3">
+          <div className="absolute bottom-3 right-3 sm:bottom-5 sm:right-5 z-30 flex items-end gap-2 sm:gap-3">
             {settings.rogAllyMode && (
-              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950/80 border border-slate-700 text-[11px] text-slate-300">
+              <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950/80 border border-slate-700 text-[11px] text-slate-300">
                 <Gamepad2 className="w-4 h-4 text-amber-400" />
                 <span>
                   {gamepadStatus.connected ? 'ROG Ally Terhubung' : 'Gamepad Siap'} · [A] Aksi · [X] HP · [Y] Peta
@@ -1380,21 +1389,21 @@ export default function App() {
               onClick={() => setActiveModal('HP_PHONE')}
               className="flex flex-col items-center group"
             >
-              <div className="relative w-12 h-16 rounded-xl bg-gradient-to-b from-amber-300 via-emerald-500 to-slate-900 border-2 border-amber-200 shadow-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
-                <Smartphone className="w-6 h-6 text-white drop-shadow" />
+              <div className="relative w-10 h-13 sm:w-12 sm:h-16 [@media(max-height:520px)]:w-9 [@media(max-height:520px)]:h-12 rounded-xl bg-gradient-to-b from-amber-300 via-emerald-500 to-slate-900 border-2 border-amber-200 shadow-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Smartphone className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow" />
                 {gameState.debt > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border border-white">
                     !
                   </span>
                 )}
               </div>
-              <span className="text-[11px] font-bold text-white drop-shadow mt-1">HP [X]</span>
+              <span className="text-[10px] sm:text-[11px] font-bold text-white drop-shadow mt-0.5 sm:mt-1">HP [X]</span>
             </button>
 
             {nearestActionLabel && (
               <button
                 onClick={() => nearestActionRef.current?.execute()}
-                className="px-6 py-3.5 rounded-xl bg-gradient-to-b from-amber-300 to-amber-400 hover:brightness-105 text-slate-950 border-2 border-amber-200 font-display font-bold text-base shadow-[0_5px_0_#92400e,0_12px_20px_rgba(0,0,0,0.5)] active:translate-y-0.5 transition-all"
+                className="px-4 sm:px-6 py-2.5 sm:py-3.5 [@media(max-height:520px)]:py-2 [@media(max-height:520px)]:px-4 rounded-xl bg-gradient-to-b from-amber-300 to-amber-400 hover:brightness-105 text-slate-950 border-2 border-amber-200 font-display font-bold text-sm sm:text-base shadow-[0_5px_0_#92400e,0_12px_20px_rgba(0,0,0,0.5)] active:translate-y-0.5 transition-all"
               >
                 {nearestActionLabel} [A]
               </button>

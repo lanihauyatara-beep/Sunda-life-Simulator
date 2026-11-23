@@ -66,12 +66,12 @@ export const FishingModal: React.FC<FishingModalProps> = ({ energy, onCatchFish,
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-5 shadow-2xl">
-        <div className="flex items-start justify-between gap-4 mb-3">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-3xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-3.5 sm:p-5 shadow-2xl max-h-[94dvh] overflow-y-auto">
+        <div className="flex items-start justify-between gap-4 mb-2.5 sm:mb-3">
           <div>
-            <h2 className="font-display text-xl font-bold text-amber-300">MEMANCING DI SUNGAI</h2>
-            <p className="text-xs text-slate-300 mt-0.5">
+            <h2 className="font-display text-lg sm:text-xl font-bold text-amber-300">MEMANCING DI SUNGAI</h2>
+            <p className="text-[11px] sm:text-xs text-slate-300 mt-0.5">
               Klik area sungai atau tekan [A] untuk melempar kail (energi -3%). Saat pelampung tenggelam, cepat tarik!
             </p>
           </div>
@@ -84,7 +84,7 @@ export const FishingModal: React.FC<FishingModalProps> = ({ energy, onCatchFish,
         {/* River Visual Area */}
         <button
           onClick={handleAction}
-          className="relative w-full h-64 rounded-xl border-2 border-amber-300/70 overflow-hidden bg-gradient-to-b from-sky-400 via-teal-600 to-cyan-800 flex flex-col items-center justify-center cursor-pointer group"
+          className="relative w-full h-40 sm:h-64 rounded-xl border-2 border-amber-300/70 overflow-hidden bg-gradient-to-b from-sky-400 via-teal-600 to-cyan-800 flex flex-col items-center justify-center cursor-pointer group"
         >
           {/* Greenery bank */}
           <div className="absolute top-0 inset-x-0 h-14 bg-gradient-to-b from-emerald-700 to-emerald-600 border-b-4 border-stone-400" />
@@ -161,29 +161,29 @@ export const FruitPickingModal: React.FC<FruitPickingModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-5 shadow-2xl">
-        <div className="flex items-start justify-between mb-3">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-3xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-3.5 sm:p-5 shadow-2xl max-h-[94dvh] overflow-y-auto">
+        <div className="flex items-start justify-between mb-2.5 sm:mb-3">
           <div>
-            <h2 className="font-display text-xl font-bold text-amber-300">KEBUN BUAH KAMPUNG</h2>
-            <p className="text-xs text-slate-300">
+            <h2 className="font-display text-lg sm:text-xl font-bold text-amber-300">KEBUN BUAH KAMPUNG</h2>
+            <p className="text-[11px] sm:text-xs text-slate-300">
               {alreadyPicked
                 ? 'Buah matang hari ini sudah dipanen. Pohon akan berbuah lagi besok pagi!'
                 : 'Klik buah yang sudah matang dan berkilau untuk dimasukkan ke keranjang Arga.'}
             </p>
           </div>
-          <div className="font-mono-num text-sm font-bold text-amber-300">
+          <div className="font-mono-num text-sm font-bold text-amber-300 shrink-0">
             {pickedCount}/{fruits.length} Dipetik
           </div>
         </div>
 
-        <div className="rounded-xl border-2 border-amber-300/70 bg-gradient-to-b from-sky-300 via-sky-200 to-emerald-600 p-6 min-h-[240px] flex flex-col justify-between">
+        <div className="rounded-xl border-2 border-amber-300/70 bg-gradient-to-b from-sky-300 via-sky-200 to-emerald-600 p-3 sm:p-6 min-h-[150px] sm:min-h-[240px] flex flex-col justify-between">
           {alreadyPicked ? (
             <div className="flex-1 flex items-center justify-center text-slate-900 font-bold text-sm bg-white/80 rounded-xl p-4">
               Semua buah matang sudah masuk stok Warung Arga hari ini.
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-3 my-auto">
+            <div className="grid grid-cols-4 gap-2 sm:gap-3 my-auto">
               {fruits.map((f) => (
                 <button
                   key={f.id}
@@ -241,8 +241,8 @@ export const SideJobModal: React.FC<SideJobModalProps> = ({ job, onComplete, onC
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[94dvh] overflow-y-auto">
         <div className="text-xs font-bold text-emerald-300 uppercase tracking-wider mb-1">
           Kerja Sampingan · {job.locationLabel}
         </div>

@@ -40,8 +40,8 @@ export const TransportPasarModal: React.FC<TransportPasarModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[94dvh] overflow-y-auto">
         <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider mb-1">
           <Bus className="w-4 h-4" />
           <span>Transportasi Kampung ↔ Pasar Tradisional</span>
@@ -165,8 +165,8 @@ export const PasarShopModal: React.FC<PasarShopModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-5 md:p-6 shadow-2xl max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-4xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-3.5 sm:p-5 md:p-6 shadow-2xl max-h-[94dvh] flex flex-col">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div>
             <h2 className="font-display text-xl font-bold text-amber-200 flex items-center gap-2">

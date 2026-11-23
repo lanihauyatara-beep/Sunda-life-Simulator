@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#facc15" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c2641a" />
+      <stop offset="100%" stop-color="#6c2a09" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)" />
+  <circle cx="256" cy="240" r="185" fill="#1e293b" opacity="0.55" />
+  <path d="M120 330 C82 315 66 276 74 246 C106 254 134 280 144 320 Z" fill="#22c55e" stroke="#14532d" stroke-width="6" />
+  <path d="M392 330 C430 315 446 276 438 246 C406 254 378 280 368 320 Z" fill="#22c55e" stroke="#14532d" stroke-width="6" />
+  <text x="256" y="218" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="900" font-size="112" fill="#451a03" stroke="#451a03" stroke-width="22" stroke-linejoin="round">SL</text>
+  <text x="256" y="218" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="900" font-size="112" fill="url(#gold)">SL</text>
+  <rect x="96" y="274" width="320" height="84" rx="20" fill="url(#wood)" stroke="#451a03" stroke-width="8" />
+  <text x="256" y="330" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="44" letter-spacing="4" fill="#fffbeb">SUNDA LIFE</text>
+</svg>
