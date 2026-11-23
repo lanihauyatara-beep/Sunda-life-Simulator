@@ -10,6 +10,7 @@ import {
   SceneId,
   VehicleType,
   WeatherCondition,
+  ArgaOutfitMode,
 } from '../types/game';
 import {
   VEHICLE_INFO,
@@ -78,6 +79,7 @@ interface GameWorldCanvasProps {
   playerPos: { x: number; y: number };
   facing: 'left' | 'right';
   isInjured: boolean;
+  outfitMode?: ArgaOutfitMode;
   npcsInScene: NpcDef[];
   greetedNpcsToday: string[];
   moveVecRef: React.MutableRefObject<{ x: number; y: number }>;
@@ -238,6 +240,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
   playerPos,
   facing,
   isInjured,
+  outfitMode = 'default',
   npcsInScene,
   greetedNpcsToday,
   moveVecRef,
@@ -1184,6 +1187,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
           shirtColor="#dc2626"
           accentColor="#f8fafc"
           hatType="none"
+          outfitMode={outfitMode}
           isArga
           isInjured={isInjured}
           facing={renderFacing}

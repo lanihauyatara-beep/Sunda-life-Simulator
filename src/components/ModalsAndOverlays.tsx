@@ -19,8 +19,12 @@ import {
   ArrowDownLeft,
   Volume2,
   CheckCircle2,
+  Maximize2,
+  Minimize2,
+  Shirt,
 } from 'lucide-react';
 import {
+  GAME_VERSION,
   PRAYER_SCHEDULE,
   RANK_TIER_DEFS,
   SCENES,
@@ -32,6 +36,7 @@ import {
   formatGameDate,
   formatGameTime,
   formatRupiah,
+  getArgaOutfitState,
   getForecastPlanningAdvice,
   getGreetingOptionsForNpc,
   getPlayerRankInfo,
@@ -249,6 +254,7 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({
 interface PrayerReminderModalProps {
   prayerName: PrayerName;
   wasWarungOpen: boolean;
+  masterSarungUnlocked?: boolean;
   onPrayNow: (where: 'masjid' | 'rumah') => void;
   onAcknowledgeCloseOnly: () => void;
 }
@@ -256,6 +262,7 @@ interface PrayerReminderModalProps {
 export const PrayerReminderModal: React.FC<PrayerReminderModalProps> = ({
   prayerName,
   wasWarungOpen,
+  masterSarungUnlocked = false,
   onPrayNow,
   onAcknowledgeCloseOnly,
 }) => {
@@ -304,6 +311,11 @@ export const PrayerReminderModal: React.FC<PrayerReminderModalProps> = ({
         </div>
 
         <p className="text-sm text-slate-200 leading-relaxed mb-3">{info?.info}</p>
+        {masterSarungUnlocked && (
+          <div className="bg-emerald-500/15 border border-emerald-400/60 rounded-xl p-2.5 text-xs text-emerald-200 font-semibold mb-3">
+            🕌 Tahap Master+: Arga otomatis mengenakan <strong>Kain Sarung, Baju Koko &amp; Peci</strong> untuk waktu sholat {prayerName}.
+          </div>
+        )}
         {wasWarungOpen && (
           <div className="bg-amber-400/15 border border-amber-400 rounded-xl p-3 text-xs text-amber-200 font-semibold mb-4">
             Warung Arga otomatis ditutup sementara demi menghormati waktu sholat {prayerName}. Setelah sholat, Arga
@@ -725,6 +737,59 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
                   </div>
                 </div>
 
+                {/* Pakaian Khusus Peringkat Arga */}
+                {(() => {
+                  const outfit = getArgaOutfitState(gameState);
+                  return (
+                    <div className="bg-slate-950 border border-amber-400/40 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                          <Shirt className="w-4 h-4" /> Pakaian Khusus Peringkat Arga
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-bold text-amber-200">
+                          Dipakai: {outfit.shortTag}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        <div
+                          className={`rounded-lg border px-2.5 py-2 ${
+                            outfit.eliteWarmUnlocked
+                              ? 'bg-sky-950/35 border-sky-400/50 text-sky-100'
+                              : 'bg-slate-900/70 border-slate-800 text-slate-400'
+                          }`}
+                        >
+                          <div className="font-bold flex items-center justify-between">
+                            <span>🧥 Pakaian Hangat</span>
+                            <span className={outfit.eliteWarmUnlocked ? 'text-emerald-300' : 'text-amber-300'}>
+                              {outfit.eliteWarmUnlocked ? 'Terbuka' : 'Tahap Elite'}
+                            </span>
+                          </div>
+                          <div className="text-[10px] opacity-85 mt-0.5">
+                            Otomatis dipakai saat Musim Hujan / gerimis.
+                          </div>
+                        </div>
+                        <div
+                          className={`rounded-lg border px-2.5 py-2 ${
+                            outfit.masterSarungUnlocked
+                              ? 'bg-emerald-950/35 border-emerald-400/50 text-emerald-100'
+                              : 'bg-slate-900/70 border-slate-800 text-slate-400'
+                          }`}
+                        >
+                          <div className="font-bold flex items-center justify-between">
+                            <span>🕌 Kain Sarung &amp; Koko</span>
+                            <span className={outfit.masterSarungUnlocked ? 'text-emerald-300' : 'text-amber-300'}>
+                              {outfit.masterSarungUnlocked ? 'Terbuka' : 'Tahap Master'}
+                            </span>
+                          </div>
+                          <div className="text-[10px] opacity-85 mt-0.5">
+                            Otomatis dipakai setiap waktu sholat tiba.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5">
                     <div className="text-xs text-slate-400 flex items-center gap-1">
@@ -1117,6 +1182,85 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
   );
 };
 
+interface DisplayModeModalProps {
+  launchLabel: string;
+  onSelectDisplayMode: (fullscreen: boolean) => void;
+  onCancel: () => void;
+}
+
+export const DisplayModeModal: React.FC<DisplayModeModalProps> = ({
+  launchLabel,
+  onSelectDisplayMode,
+  onCancel,
+}) => {
+  useUiGamepadAction((btn) => {
+    if (btn === 'A') onSelectDisplayMode(true);
+    else if (btn === 'X' || btn === 'Y') onSelectDisplayMode(false);
+    else if (btn === 'B') onCancel();
+  });
+
+  return (
+    <div className="fixed inset-0 z-[110] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+      <div className="w-full max-w-md bg-slate-900 border-2 border-amber-400 rounded-2xl p-5 sm:p-6 shadow-[0_0_50px_rgba(245,158,11,0.3)]">
+        <div className="text-center mb-4">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/50 text-amber-300 text-[11px] font-bold mb-2">
+            Versi {GAME_VERSION} · Pilihan Layar
+          </div>
+          <h2 className="font-display text-xl sm:text-2xl font-bold text-amber-100">
+            Pilih Mode Tampilan Bermain
+          </h2>
+          <p className="text-xs text-slate-300 mt-1">
+            {launchLabel} — pilih bermain dalam mode <strong>Layar Penuh (Fullscreen)</strong> atau{' '}
+            <strong>Mode Biasa</strong>.
+          </p>
+        </div>
+
+        <div className="space-y-2.5 mb-4">
+          <button
+            type="button"
+            onClick={() => onSelectDisplayMode(true)}
+            className="w-full p-3.5 rounded-xl bg-gradient-to-b from-amber-300 to-amber-400 hover:brightness-105 text-slate-950 font-bold text-sm flex items-center gap-3 shadow-lg border-2 border-amber-200 text-left"
+          >
+            <div className="w-10 h-10 rounded-lg bg-slate-950/15 flex items-center justify-center shrink-0">
+              <Maximize2 className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <div className="font-extrabold">Mainkan Fullscreen (Layar Penuh) [A]</div>
+              <div className="text-[11px] text-amber-950 font-semibold">
+                Tampilan penuh bebas gangguan bilah browser
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onSelectDisplayMode(false)}
+            className="w-full p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-50 font-bold text-sm flex items-center gap-3 border border-amber-400/50 text-left"
+          >
+            <div className="w-10 h-10 rounded-lg bg-slate-950/70 flex items-center justify-center shrink-0 text-amber-300">
+              <Minimize2 className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <div className="font-bold">Mainkan Tidak Fullscreen (Mode Biasa) [X]</div>
+              <div className="text-[11px] text-slate-300 font-normal">
+                Tetap di jendela browser standar
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onCancel}
+          className="w-full py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold"
+        >
+          Kembali [B]
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const ChangelogAndGuideModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   useUiGamepadAction((btn) => {
     if (btn === 'A' || btn === 'B') onClose();
@@ -1126,36 +1270,65 @@ export const ChangelogAndGuideModal: React.FC<{ onClose: () => void }> = ({ onCl
     <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
       <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[94dvh] flex flex-col">
         <div className="text-center mb-4">
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/60 text-amber-300 text-[11px] font-bold mb-1.5">
+            <Sparkles className="w-3.5 h-3.5" /> Versi {GAME_VERSION} · Pembaruan &amp; Panduan
+          </div>
           <h2 className="font-display text-2xl font-bold text-amber-200 flex items-center justify-center gap-2">
             <BookOpen className="w-6 h-6 text-amber-400" />
-            Panduan Sunda Life Simulator
+            Yang Baru di Versi {GAME_VERSION} &amp; Panduan
           </h2>
-          <p className="text-xs text-slate-400 mt-1">Semua fitur lengkap Kampung Sunda bersama Arga</p>
+          <p className="text-xs text-slate-400 mt-1">Semua fitur terbaru &amp; panduan lengkap Kampung Sunda bersama Arga</p>
         </div>
 
         <div className="space-y-2.5 overflow-y-auto pr-1 mb-5 text-xs text-slate-200">
+          {/* YANG BARU DI VERSI 3.1 */}
+          <div className="bg-gradient-to-br from-amber-950/55 via-slate-950 to-emerald-950/45 border-2 border-amber-400/60 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-400 text-slate-950 font-extrabold text-[11px]">
+                <Sparkles className="w-3.5 h-3.5" /> YANG BARU · VERSI {GAME_VERSION}
+              </span>
+              <span className="text-[10px] text-amber-200 font-semibold">Edisi Sunda Priangan</span>
+            </div>
+            <ul className="space-y-1.5 text-slate-200 leading-relaxed">
+              <li>
+                • <strong>🖥️ Pilihan Layar Fullscreen / Tidak saat Mulai:</strong> Saat mulai bermain atau memuat slot, pemain bisa langsung memilih mode <strong>Fullscreen (Layar Penuh)</strong> atau <strong>Mode Biasa</strong> (plus tombol ubah layar penuh di HUD).
+              </li>
+              <li>
+                • <strong>🧥 Pakaian Hangat (Tahap Elite+):</strong> Mulai peringkat <strong>Elite</strong>, Arga otomatis memakai <strong>jaket tebal, kupluk &amp; syal rajut hangat</strong> setiap Musim Hujan atau saat hujan/gerimis.
+              </li>
+              <li>
+                • <strong>🕌 Kain Sarung Waktu Sholat (Tahap Master+):</strong> Mulai peringkat <strong>Master</strong>, Arga otomatis mengenakan <strong>Kain Sarung tenun, Baju Koko &amp; Peci</strong> setiap waktu sholat tiba.
+              </li>
+              <li>
+                • <strong>🔊 Suara Alam &amp; Masjid Asli:</strong> Tabuhan <strong>Beduk + rekaman Adzan asli</strong> saat waktu sholat, suara asli <strong>jangkrik malam hari</strong> (18.00–05.00), <strong>ayam berkokok pagi hari</strong> (04.30–08.30), serta riuh tawar-menawar Pasar Sunda.
+              </li>
+              <li>
+                • <strong>📅 Kalender 12 Bulan &amp; Renovasi Warung:</strong> Penanggalan penuh <strong>JAN–DES</strong>, fitur <strong>Renovasi Warung</strong> (hingga 22 slot), <strong>Misi Harian</strong>, <strong>Prakiraan Cuaca 3 Hari</strong>, dan dukungan penuh <strong>Controller</strong>.
+              </li>
+            </ul>
+          </div>
+
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
             <span className="inline-block px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-bold mr-2">WARUNG ARGA &amp; WARUNG ASIH</span>
             <strong>Warung Arga</strong> (toko milik Arga) hanya boleh buka pukul <strong>09.00 – 17.00 WIB</strong>.
-            Saat Adzan tiba, warung tutup otomatis untuk sholat. Untuk ngopi &amp; makan memulihkan energi, mampir ke{' '}
+            Saat Adzan tiba, warung tutup otomatis untuk sholat. Renovasi warung untuk membuka lebih banyak slot barang! Untuk ngopi &amp; makan memulihkan energi, mampir ke{' '}
             <strong>Warung Asih</strong> di sampingnya!
           </div>
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
-            <span className="inline-block px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-bold mr-2">PERINGKAT &amp; KERJA</span>
-            Aktivitas berjualan, sapa warga, kerja sampingan Sunda, sholat, memancing, memetik buah &amp; tradisi menaikkan{' '}
-            <strong>Peringkat Keaktifan</strong> dari <strong>Warrior → Elite → Master → Grandmaster → Epic → Legend → Mythic</strong>!
+            <span className="inline-block px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-bold mr-2">PERINGKAT, PAKAIAN &amp; KERJA</span>
+            Aktivitas berjualan, sapa warga (dengan <strong>salam Basa Sunda sopan</strong>), kerja sampingan interaktif, sholat, memancing, memetik buah &amp; tradisi menaikkan{' '}
+            <strong>Peringkat Keaktifan</strong> dari <strong>Warrior → Elite (Pakaian Hangat) → Master (Kain Sarung Sholat) → Grandmaster → Epic → Legend → Mythic</strong>!
             Jam istirahat tidur malam mulai pukul <strong>18.00 – 04.30 WIB</strong> (atau tidur kapan saja dari Kamar Istirahat).
           </div>
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
             <span className="inline-block px-2 py-0.5 rounded bg-sky-400 text-slate-950 font-bold mr-2">PASAR &amp; JALAN</span>
             Waspada Mobil, Angkot, Motor, Pedati, Delman &amp; Becak di jalan raya agar tidak tertabrak dan kena biaya
-            dokter! Pasar jauh dari kampung: naik Angkot (Rp 5.000 pergi / Rp 5.000 pulang) atau Delman/Becak, dan
-            gunakan jasa kirim Mamang Delman / Becak (ada ongkos kirim).
+            dokter! Pasar jauh dari kampung: naik Angkot (Rp 5.000 pergi / Rp 5.000 pulang, operasi 07.00–21.00 WIB) atau Delman/Becak, dan
+            gunakan jasa kirim Mamang Delman / Becak.
           </div>
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
-            <span className="inline-block px-2 py-0.5 rounded bg-rose-400 text-slate-950 font-bold mr-2">TRADISI &amp; SAVE</span>
-            Sapa warga dengan ramah (lengkap dengan terjemahan Indonesia) untuk tingkatkan kepuasan, bayar urunan tradisi
-            Sunda (Seren Taun, Ngalaksa, Ngaruwat Bumi, Tingkeban, Sawer, Botram), dan kelola 6 slot save di Local Storage!
+            <span className="inline-block px-2 py-0.5 rounded bg-rose-400 text-slate-950 font-bold mr-2">TRADISI, HP &amp; CONTROLLER</span>
+            Bayar urunan tradisi Sunda (Seren Taun, Ngalaksa, Ngaruwat Bumi, Tingkeban, Sawer, Botram), pantau <strong>10 transaksi terakhir</strong> &amp; <strong>prakiraan cuaca 3 hari</strong> di HP <strong>[X]</strong>, serta mainkan pakai sentuh, keyboard, atau <strong>Controller</strong>!
           </div>
         </div>
 

@@ -15,6 +15,8 @@ import {
   FolderOpen,
   CheckCircle2,
   Gift,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import {
   ASSETS,
@@ -39,6 +41,7 @@ import {
   formatGameDate,
   formatGameTime,
   formatRupiah,
+  getArgaOutfitState,
   getPlayerRankInfo,
   getWarungRenovationInfo,
   rollInitialSeasonAndWeather,
@@ -76,6 +79,7 @@ import {
   AccidentModal,
   ChangelogAndGuideModal,
   DialogueModal,
+  DisplayModeModal,
   MapModal,
   PhoneModal,
   PrayerReminderModal,
@@ -310,9 +314,58 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [coverFocusIdx, setCoverFocusIdx] = useState(0);
   const [slotFocusIdx, setSlotFocusIdx] = useState(0);
+  const [pendingLaunch, setPendingLaunch] = useState<
+    { type: 'continue' } | { type: 'slot'; slotId: number; label: string } | null
+  >(null);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() =>
+    typeof document !== 'undefined' ? Boolean(document.fullscreenElement) : false
+  );
 
   const nearestActionRef = useRef<{ label: string; execute: () => void } | null>(null);
   const [nearestActionLabel, setNearestActionLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      const fsDoc = document as Document & { webkitFullscreenElement?: Element | null };
+      setIsFullscreen(Boolean(document.fullscreenElement || fsDoc.webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    document.addEventListener('webkitfullscreenchange', syncFullscreen as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen);
+      document.removeEventListener('webkitfullscreenchange', syncFullscreen as EventListener);
+    };
+  }, []);
+
+  const applyFullscreenChoice = useCallback((wantFullscreen: boolean) => {
+    try {
+      const fsDoc = document as Document & {
+        webkitFullscreenElement?: Element | null;
+        webkitExitFullscreen?: () => Promise<void> | void;
+      };
+      const fsEl = document.documentElement as HTMLElement & {
+        webkitRequestFullscreen?: () => Promise<void> | void;
+      };
+      const currentlyFs = Boolean(document.fullscreenElement || fsDoc.webkitFullscreenElement);
+      if (wantFullscreen) {
+        if (!currentlyFs) {
+          if (fsEl.requestFullscreen) {
+            void fsEl.requestFullscreen().catch(() => {});
+          } else if (fsEl.webkitRequestFullscreen) {
+            fsEl.webkitRequestFullscreen();
+          }
+        }
+      } else if (currentlyFs) {
+        if (document.exitFullscreen) {
+          void document.exitFullscreen().catch(() => {});
+        } else if (fsDoc.webkitExitFullscreen) {
+          fsDoc.webkitExitFullscreen();
+        }
+      }
+    } catch {
+      // ignore browser fullscreen restriction
+    }
+  }, []);
 
   // Sync audio volume with settings
   useEffect(() => {
@@ -496,8 +549,7 @@ export default function App() {
   }, [screen, activeModal]);
 
   // Handlers
-  const handleStartOrContinue = useCallback(() => {
-    soundEngine.confirm();
+  const executeLaunchContinue = useCallback(() => {
     if (latestSlot?.state) {
       setGameState(latestSlot.state);
       try {
@@ -512,12 +564,12 @@ export default function App() {
       saveGameToSlot(fresh, 1);
       showToast('Selamat datang di Kampung Sunda Sukamaju, Arga!');
     }
+    setActiveModal(null);
     setScreen('PLAYING');
   }, [latestSlot, saveGameToSlot, showToast]);
 
-  const handleSelectSlot = useCallback(
+  const executeLaunchSlot = useCallback(
     (slotId: number) => {
-      soundEngine.confirm();
       const found = slots.find((s) => s.slotId === slotId);
       if (found && !found.empty && found.state) {
         setGameState(found.state);
@@ -537,6 +589,45 @@ export default function App() {
       setScreen('PLAYING');
     },
     [slots, saveGameToSlot, showToast]
+  );
+
+  const handleStartOrContinue = useCallback(() => {
+    soundEngine.confirm();
+    setPendingLaunch({ type: 'continue' });
+    setActiveModal('DISPLAY_MODE');
+  }, []);
+
+  const handleSelectSlot = useCallback(
+    (slotId: number) => {
+      soundEngine.confirm();
+      if (screen === 'COVER') {
+        const found = slots.find((s) => s.slotId === slotId);
+        const label =
+          found && !found.empty && found.state
+            ? `Muat Slot ${slotId} (${found.state.warungName})`
+            : `Mulai Permainan Baru di Slot ${slotId}`;
+        setPendingLaunch({ type: 'slot', slotId, label });
+        setActiveModal('DISPLAY_MODE');
+        return;
+      }
+      executeLaunchSlot(slotId);
+    },
+    [screen, slots, executeLaunchSlot]
+  );
+
+  const handleConfirmDisplayMode = useCallback(
+    (wantFullscreen: boolean) => {
+      applyFullscreenChoice(wantFullscreen);
+      soundEngine.confirm();
+      const target = pendingLaunch;
+      setPendingLaunch(null);
+      if (target?.type === 'slot') {
+        executeLaunchSlot(target.slotId);
+      } else {
+        executeLaunchContinue();
+      }
+    },
+    [applyFullscreenChoice, pendingLaunch, executeLaunchSlot, executeLaunchContinue]
   );
 
   const handleSaveCurrentToSlot = useCallback(
@@ -1295,6 +1386,15 @@ export default function App() {
           }
           return;
         }
+        if (activeModal === 'DISPLAY_MODE') {
+          if (btn === 'B') {
+            setPendingLaunch(null);
+            setActiveModal(null);
+          } else if (btn === 'A' || btn === 'X' || btn === 'Y') {
+            emitUiGamepadAction(btn);
+          }
+          return;
+        }
         if (activeModal === 'SETTINGS' || activeModal === 'CHANGELOG') {
           if (btn === 'B' || btn === 'A') setActiveModal(null);
           return;
@@ -1415,6 +1515,10 @@ export default function App() {
   const currentSceneDef = SCENES[gameState.scene];
   const npcsInCurrentScene = useMemo(() => NPCS.filter((n) => n.scene === gameState.scene), [gameState.scene]);
   const isSleepReminder = currentHour >= 18 || currentHour < 4.5;
+  const argaOutfitInfo = useMemo(
+    () => getArgaOutfitState(gameState, activeModal === 'PRAYER_REMINDER'),
+    [gameState, activeModal]
+  );
 
   // Contextual environmental ambient loop (rain intensification, pasar bustle, river babble, village crickets)
   const ambientTimeBucket = Math.floor(gameState.minutesOfDay / 30);
@@ -1470,6 +1574,23 @@ export default function App() {
           />
         )}
         {activeModal === 'CHANGELOG' && <ChangelogAndGuideModal onClose={() => setActiveModal(null)} />}
+        {activeModal === 'DISPLAY_MODE' && pendingLaunch && (
+          <DisplayModeModal
+            launchLabel={
+              pendingLaunch.type === 'slot'
+                ? pendingLaunch.label
+                : latestSlot?.state
+                ? `Lanjutkan Slot ${latestSlot.slotId} (${latestSlot.warungName})`
+                : 'Mulai Petualangan Baru (Slot 1)'
+            }
+            onSelectDisplayMode={handleConfirmDisplayMode}
+            onCancel={() => {
+              soundEngine.click();
+              setPendingLaunch(null);
+              setActiveModal(null);
+            }}
+          />
+        )}
       </>
     );
   }
@@ -1547,6 +1668,7 @@ export default function App() {
           playerPos={gameState.playerPos}
           facing={gameState.facing}
           isInjured={gameState.isInjured}
+          outfitMode={argaOutfitInfo.mode}
           npcsInScene={npcsInCurrentScene}
           greetedNpcsToday={gameState.greetedNpcsToday}
           moveVecRef={moveVecRef}
@@ -1696,6 +1818,17 @@ export default function App() {
             className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-400/60 text-amber-200 shadow"
           >
             <FolderOpen className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => {
+              soundEngine.click();
+              applyFullscreenChoice(!isFullscreen);
+            }}
+            title={isFullscreen ? 'Keluar Layar Penuh (Mode Biasa)' : 'Mode Layar Penuh (Fullscreen)'}
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-400/60 text-amber-200 shadow"
+          >
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
 
           <button
@@ -1984,6 +2117,7 @@ export default function App() {
         <PrayerReminderModal
           prayerName={activePrayerAlert.prayer}
           wasWarungOpen={activePrayerAlert.wasWarungOpen}
+          masterSarungUnlocked={argaOutfitInfo.masterSarungUnlocked}
           onPrayNow={(where) => {
             soundEngine.angklungSuccess();
             const prayer = activePrayerAlert.prayer;

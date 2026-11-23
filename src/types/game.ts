@@ -22,6 +22,8 @@ export type RankTierName =
   | 'Legend'
   | 'Mythic';
 
+export type ArgaOutfitMode = 'default' | 'warm' | 'sarung';
+
 export interface RankTierInfo {
   tier: RankTierName;
   division: string;
@@ -80,7 +82,8 @@ export type ActiveModal =
   | 'FRUIT_PICKING'
   | 'ACCIDENT'
   | 'TUTORIAL'
-  | 'HUTANG_BUKU';
+  | 'HUTANG_BUKU'
+  | 'DISPLAY_MODE';
 
 export interface GameSettings {
   musicVolume: number;

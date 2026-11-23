@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BookOpen, ChevronDown, ChevronUp, Gamepad2, Sparkles } from 'lucide-react';
-import { ASSETS, formatRupiah } from '../data/gameData';
+import { ASSETS, GAME_VERSION, formatRupiah } from '../data/gameData';
 import { SaveSlotSummary } from '../types/game';
 import { PWAInstallButton } from './PWAAndOrientationUI';
 
@@ -359,8 +359,10 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({
                   <li className="flex items-start gap-1.5">
                     <span className="font-bold text-amber-300 shrink-0">3.</span>
                     <span>
-                      <strong className="text-white">Tata Krama Sunda &amp; Sholat:</strong> Pilih{' '}
-                      <span className="text-emerald-300 font-semibold">salam Basa Sunda sopan</span> saat menyapa warga untuk bonus poin, dan sholat saat Adzan tiba.
+                      <strong className="text-white">Adat, Sholat &amp; Pakaian:</strong> Pilih{' '}
+                      <span className="text-emerald-300 font-semibold">salam Basa Sunda sopan</span>, capai{' '}
+                      <span className="text-amber-200 font-semibold">Elite</span> (Pakaian Hangat hujan) &amp;{' '}
+                      <span className="text-emerald-300 font-semibold">Master</span> (Kain Sarung saat sholat).
                     </span>
                   </li>
                   <li className="flex items-start gap-1.5">
@@ -386,7 +388,7 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({
               </div>
 
               <div className="mt-1 sm:mt-1.5 text-[10px] sm:text-xs font-bold text-slate-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
-                Versi 2.2 · Edisi Sunda Priangan
+                Versi {GAME_VERSION} · Edisi Sunda Priangan
               </div>
 
               <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">

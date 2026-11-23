@@ -18,7 +18,10 @@ import {
   DailyMissionTask,
   DailyMissionTaskId,
   DailyMissionsState,
+  ArgaOutfitMode,
 } from '../types/game';
+
+export const GAME_VERSION = '3.1';
 
 export const ASSETS = {
   cover: '/src/assets/images/cover_sunda_pak_guruai_1795397943135.jpg',
@@ -816,6 +819,82 @@ export const PRAYER_SCHEDULE: { name: PrayerName; minutes: number; label: string
     info: 'Malam semakin tenang. Tunaikan sholat Isya sebelum bersiap istirahat.',
   },
 ];
+
+export function getRankTierIndex(tier: RankTierName): number {
+  const idx = RANK_TIER_DEFS.findIndex((r) => r.tier === tier);
+  return idx >= 0 ? idx : 0;
+}
+
+export function isWithinPrayerWindow(
+  minutesOfDay: number,
+  windowMinutes = 45
+): { active: boolean; prayerName: PrayerName | null } {
+  const m = ((Math.floor(minutesOfDay) % 1440) + 1440) % 1440;
+  for (const p of PRAYER_SCHEDULE) {
+    if (m >= p.minutes && m <= p.minutes + windowMinutes) {
+      return { active: true, prayerName: p.name };
+    }
+  }
+  return { active: false, prayerName: null };
+}
+
+export interface ArgaOutfitInfo {
+  mode: ArgaOutfitMode;
+  label: string;
+  shortTag: string;
+  description: string;
+  eliteWarmUnlocked: boolean;
+  masterSarungUnlocked: boolean;
+  rankTier: RankTierName;
+}
+
+export function getArgaOutfitState(
+  state: GameState,
+  hasActivePrayerModal = false
+): ArgaOutfitInfo {
+  const rankInfo = getPlayerRankInfo(computeEffectiveActivityPoints(state));
+  const tierIdx = getRankTierIndex(rankInfo.tier);
+  const eliteWarmUnlocked = tierIdx >= 1; // Elite, Master, Grandmaster, Epic, Legend, Mythic
+  const masterSarungUnlocked = tierIdx >= 2; // Master, Grandmaster, Epic, Legend, Mythic
+
+  const prayerWin = isWithinPrayerWindow(state.minutesOfDay, 45);
+  const isRainySeasonOrRain =
+    state.season === 'hujan' || state.weather === 'hujan' || state.weather === 'gerimis';
+
+  if (masterSarungUnlocked && (hasActivePrayerModal || prayerWin.active)) {
+    return {
+      mode: 'sarung',
+      label: 'Kain Sarung & Baju Koko (Master+)',
+      shortTag: 'Sarung Sholat',
+      description: `Mengenakan kain sarung tenun, baju koko & peci untuk waktu sholat ${prayerWin.prayerName ?? ''}.`.trim(),
+      eliteWarmUnlocked,
+      masterSarungUnlocked,
+      rankTier: rankInfo.tier,
+    };
+  }
+
+  if (eliteWarmUnlocked && isRainySeasonOrRain) {
+    return {
+      mode: 'warm',
+      label: 'Jaket & Syal Hangat (Elite+)',
+      shortTag: 'Pakaian Hangat',
+      description: 'Mengenakan jaket tebal berlapis dan syal rajut hangat saat musim hujan Priangan.',
+      eliteWarmUnlocked,
+      masterSarungUnlocked,
+      rankTier: rankInfo.tier,
+    };
+  }
+
+  return {
+    mode: 'default',
+    label: 'Kemeja Warung Harian',
+    shortTag: 'Pakaian Harian',
+    description: 'Setelan kemeja kasual harian Arga di Kampung Sukamaju.',
+    eliteWarmUnlocked,
+    masterSarungUnlocked,
+    rankTier: rankInfo.tier,
+  };
+}
 
 // Harga barang sesuai harga pasar & warung Indonesia saat ini (dalam Rupiah)
 export const ITEMS: ItemDef[] = [

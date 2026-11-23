@@ -1,6 +1,6 @@
 import React from 'react';
 import { BedDouble, Utensils, Sofa, DoorOpen, BookOpen, MoonStar } from 'lucide-react';
-import { ASSETS, formatGameDate, formatGameTime, formatRupiah } from '../data/gameData';
+import { ASSETS, formatGameDate, formatGameTime, formatRupiah, getArgaOutfitState } from '../data/gameData';
 import { GameState, SceneId } from '../types/game';
 import { useUiGamepadAction } from '../hooks/useGamepad';
 import { CharacterSprite } from './CharacterAvatar';
@@ -28,6 +28,7 @@ export const HomeInteriorView: React.FC<HomeInteriorViewProps> = ({
   const isSleepTime = hour >= 18 || hour < 4.5;
   const nextWakeDay = hour >= 4.5 ? gameState.day + 1 : gameState.day;
   const currentRoom = gameState.scene;
+  const outfitInfo = getArgaOutfitState(gameState);
 
   const rooms: SceneId[] = ['rumah_ruang_tamu', 'rumah_dapur', 'rumah_kamar'];
   useUiGamepadAction((btn) => {
@@ -113,14 +114,21 @@ export const HomeInteriorView: React.FC<HomeInteriorViewProps> = ({
         </div>
 
         {/* Arga Character Standing in Room */}
-        <div className="mb-4">
+        <div className="mb-4 flex flex-col items-center gap-1.5">
           <CharacterSprite
             name="Arga"
             shirtColor="#dc2626"
             accentColor="#f8fafc"
+            outfitMode={outfitInfo.mode}
             isArga
             isInjured={gameState.isInjured}
           />
+          {outfitInfo.mode !== 'default' && (
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-900/90 border border-amber-400/60 text-[10px] font-bold text-amber-200 shadow">
+              {outfitInfo.mode === 'sarung' ? '🕌 ' : '🧥 '}
+              {outfitInfo.label}
+            </span>
+          )}
         </div>
 
         {/* Room Interactive Card */}
