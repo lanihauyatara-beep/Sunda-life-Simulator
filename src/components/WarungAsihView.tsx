@@ -85,7 +85,7 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
           </div>
 
           {/* Menu Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
             {menuItems.map((menu, idx) => {
               const disabled = gameState.money < menu.retailPrice || gameState.energy >= 100;
               const isFocused = focusedIdx === idx;
@@ -98,15 +98,22 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
                   }`}
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-3xl">{menu.emojiIcon}</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-2xl sm:text-3xl">{menu.emojiIcon}</span>
                       <span className="text-[11px] font-mono-num font-bold text-emerald-300">
                         +{menu.energyRestore}% Energi
                       </span>
                     </div>
-                    <div className="font-bold text-amber-100 text-sm">{menu.name}</div>
-                    <div className="text-[11px] text-amber-300/80 font-medium">{menu.sundaName}</div>
-                    <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">{menu.description}</p>
+                    <div className="font-bold text-amber-100 text-xs sm:text-sm leading-snug">{menu.name}</div>
+                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                      <span className="text-[11px] text-amber-300/80 font-medium">{menu.sundaName}</span>
+                      {menu.seasonTag === gameState.season && (
+                        <span className="px-1.5 py-0.2 rounded bg-amber-400/20 border border-amber-400/50 text-amber-200 text-[9px] font-bold">
+                          {menu.seasonTag === 'hujan' ? '☔ Cocok Hujan' : '☀️ Segar Terik'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">{menu.description}</p>
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-slate-800">

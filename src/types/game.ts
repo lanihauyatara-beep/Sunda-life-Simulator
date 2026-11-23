@@ -38,6 +38,10 @@ export interface RankTierInfo {
 
 export type VehicleType = 'mobil' | 'angkot' | 'motor' | 'pedati' | 'delman' | 'becak';
 
+export type SeasonType = 'kemarau' | 'hujan';
+
+export type WeatherCondition = 'terik' | 'cerah' | 'mendung' | 'gerimis' | 'hujan';
+
 export type PrayerName = 'Subuh' | 'Dzuhur' | 'Ashar' | 'Maghrib' | 'Isya';
 
 export type TraditionName =
@@ -88,6 +92,7 @@ export interface ItemDef {
   wholesalePrice: number; // harga kulakan di pasar (Rp)
   retailPrice: number; // harga jual default (Rp)
   energyRestore?: number;
+  seasonTag?: 'kemarau' | 'hujan' | 'semua';
   description: string;
   emojiIcon: string;
 }
@@ -157,6 +162,12 @@ export interface DialogueOption {
   replyId: string; // Terjemahan Bahasa Indonesia
 }
 
+export interface NpcWaypoint {
+  x: number;
+  y: number;
+  pauseSec?: number;
+}
+
 export interface NpcDef {
   id: string;
   name: string;
@@ -164,6 +175,8 @@ export interface NpcDef {
   scene: SceneId;
   x: number;
   y: number;
+  patrolPath?: NpcWaypoint[];
+  walkSpeed?: number; // % per second
   shirtColor: string;
   accentColor: string;
   hatType: 'peci' | 'iket' | 'kerudung' | 'topi' | 'none';
@@ -278,6 +291,9 @@ export interface GameState {
   totalPrayersCount: number;
   totalActivitiesCount: number;
   fruitPickedToday: boolean;
+  season: SeasonType;
+  weather: WeatherCondition;
+  weatherRemainingMin: number;
   lastSavedAt: string;
 }
 

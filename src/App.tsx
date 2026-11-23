@@ -17,19 +17,25 @@ import {
 import {
   ASSETS,
   DEFAULT_SETTINGS,
+  ITEMS,
   ITEM_MAP,
   NPCS,
   PRAYER_SCHEDULE,
   SCENES,
+  SEASON_META,
   SIDE_JOBS,
   TRADITIONS,
   VEHICLE_INFO,
+  WEATHER_META,
   computeEffectiveActivityPoints,
   createInitialGameState,
   formatGameDate,
   formatGameTime,
   formatRupiah,
   getPlayerRankInfo,
+  pickRandomSeason,
+  rollInitialSeasonAndWeather,
+  rollNextWeather,
 } from './data/gameData';
 import {
   ActiveModal,
@@ -98,16 +104,28 @@ function readAllSaveSlots(): SaveSlotSummary[] {
           !rawParsed.warungName || rawParsed.warungName === 'Warung Asih'
             ? 'Warung Arga'
             : rawParsed.warungName;
+        const defaultPrices: Record<string, number> = {};
+        for (const it of ITEMS) {
+          defaultPrices[it.id] = it.retailPrice;
+        }
+        const fallbackWeather = rollInitialSeasonAndWeather(rawParsed.minutesOfDay ?? 450);
         const parsed: GameState = {
           ...rawParsed,
           slotId: i,
           playerName: 'Arga',
           warungName,
+          customPrices: { ...defaultPrices, ...(rawParsed.customPrices ?? {}) },
           activityPoints: effectivePts,
           totalSideJobsCount: rawParsed.totalSideJobsCount ?? 0,
           totalGreetingsCount: rawParsed.totalGreetingsCount ?? 0,
           totalPrayersCount: rawParsed.totalPrayersCount ?? 1,
           totalActivitiesCount: rawParsed.totalActivitiesCount ?? 0,
+          season: rawParsed.season ?? fallbackWeather.season,
+          weather: rawParsed.weather ?? fallbackWeather.weather,
+          weatherRemainingMin:
+            typeof rawParsed.weatherRemainingMin === 'number'
+              ? rawParsed.weatherRemainingMin
+              : fallbackWeather.weatherRemainingMin,
         };
         list.push({
           slotId: i,
@@ -132,7 +150,7 @@ function readAllSaveSlots(): SaveSlotSummary[] {
 function advanceClockState(
   prev: GameState,
   deltaMinutes: number
-): { next: GameState; autoClosedToast: string | null } {
+): { next: GameState; autoClosedToast: string | null; weatherToast: string | null } {
   const rawMin = prev.minutesOfDay + deltaMinutes;
   const daysPassed = Math.floor(rawMin / 1440);
   const nextMin = ((rawMin % 1440) + 1440) % 1440;
@@ -145,6 +163,10 @@ function advanceClockState(
   let nextFruitPicked = prev.fruitPickedToday;
   let nextInjured = prev.isInjured;
   let nextInjuryDays = prev.injuryDaysLeft;
+  let nextSeason = prev.season ?? 'kemarau';
+  let nextWeather = prev.weather ?? 'cerah';
+  let nextWeatherRemaining = (prev.weatherRemainingMin ?? 90) - deltaMinutes;
+  let weatherToast: string | null = null;
 
   if (daysPassed > 0) {
     nextDay += daysPassed;
@@ -157,6 +179,28 @@ function advanceClockState(
       nextInjuryDays = Math.max(0, nextInjuryDays - daysPassed);
       if (nextInjuryDays <= 0) nextInjured = false;
     }
+    // Pergantian hari berpeluang mengganti musim (Kemarau <-> Musim Hujan) secara acak
+    if (Math.random() < 0.38) {
+      nextSeason = nextSeason === 'hujan' ? 'kemarau' : 'hujan';
+    }
+  }
+
+  // Cuaca berubah berkala (di Musim Hujan hujan tidak turun terus-menerus, bergantian hujan/gerimis & mendung/cerah)
+  if (nextWeatherRemaining <= 0) {
+    const rolled = rollNextWeather(nextSeason, nextWeather, nextMin);
+    if (rolled.weather !== nextWeather) {
+      if (rolled.weather === 'hujan') {
+        weatherToast = '🌧️ Hujan mulai turun di Kampung Sukamaju! Warga mencari Jas Hujan & Bandrek di warung.';
+      } else if (rolled.weather === 'gerimis') {
+        weatherToast = '🌦️ Gerimis turun ringan di kampung.';
+      } else if ((nextWeather === 'hujan' || nextWeather === 'gerimis') && (rolled.weather === 'mendung' || rolled.weather === 'cerah')) {
+        weatherToast = '⛅ Hujan sudah reda! Langit kampung kembali tenang.';
+      } else if (rolled.weather === 'terik' && nextMin >= 10 * 60 && nextMin < 15 * 60) {
+        weatherToast = '☀️ Matahari siang bersinar terik! Es Cendol & Teh Manis laris di warung.';
+      }
+    }
+    nextWeather = rolled.weather;
+    nextWeatherRemaining = rolled.durationMin;
   }
 
   let warungOpen = prev.warungOpen;
@@ -183,8 +227,12 @@ function advanceClockState(
       fruitPickedToday: nextFruitPicked,
       isInjured: nextInjured,
       injuryDaysLeft: nextInjuryDays,
+      season: nextSeason,
+      weather: nextWeather,
+      weatherRemainingMin: nextWeatherRemaining,
     },
     autoClosedToast,
+    weatherToast,
   };
 }
 
@@ -319,7 +367,7 @@ export default function App() {
 
     const timer = setInterval(() => {
       const prev = gameStateRef.current;
-      const { next: advanced, autoClosedToast } = advanceClockState(prev, 1);
+      const { next: advanced, autoClosedToast, weatherToast } = advanceClockState(prev, 1);
       const nextMin = advanced.minutesOfDay;
       const nextDay = advanced.day;
 
@@ -360,11 +408,16 @@ export default function App() {
           warungCloseReason: closeReason,
           remindedPrayersToday: nextReminded,
           activeTradition: matchingTradition ? matchingTradition.id : synced.activeTradition,
+          season: advanced.season,
+          weather: advanced.weather,
+          weatherRemainingMin: advanced.weatherRemainingMin,
         };
       });
 
       if (autoClosedToast) {
         setToastMsg(autoClosedToast);
+      } else if (weatherToast) {
+        setToastMsg(weatherToast);
       }
       if (triggeredPrayer) {
         soundEngine.prayerBell();
@@ -723,6 +776,8 @@ export default function App() {
 
     if (isSleepWindow || prev.isInjured) {
       const nextDay = hour >= 21 || (prev.isInjured && hour >= 4.5) ? prev.day + 1 : prev.day;
+      const nextSeason = Math.random() < 0.45 ? pickRandomSeason() : prev.season;
+      const morningWeather = rollNextWeather(nextSeason, 'cerah', 4 * 60 + 30);
       const nextState: GameState = {
         ...prev,
         day: nextDay,
@@ -736,11 +791,16 @@ export default function App() {
         completedJobsToday: [],
         greetedNpcsToday: [],
         fruitPickedToday: false,
+        season: nextSeason,
+        weather: morningWeather.weather,
+        weatherRemainingMin: morningWeather.durationMin,
         activityPoints: computeEffectiveActivityPoints(prev) + 12,
       };
       setGameState(nextState);
       saveGameToSlot(nextState);
-      showToast('Selamat pagi! Arga bangun segar jam 04.30 WIB dengan Energi 100% (+12 Poin).');
+      showToast(
+        `Selamat pagi! Jam 04.30 WIB · ${SEASON_META[nextSeason].label} (${WEATHER_META[morningWeather.weather].label}). Energi 100% (+12 Poin).`
+      );
     } else {
       setGameState((curr) => {
         const { next } = advanceClockState(curr, 60);
@@ -1104,6 +1164,7 @@ export default function App() {
         <GameWorldCanvas
           scene={currentSceneDef}
           minutesOfDay={gameState.minutesOfDay}
+          weather={gameState.weather}
           playerPos={gameState.playerPos}
           facing={gameState.facing}
           isInjured={gameState.isInjured}
@@ -1130,11 +1191,28 @@ export default function App() {
       {/* TOP GAMEPLAY HUD BAR (hidden when modal/dialogue is open for a clean view) */}
       {activeModal === null && (
       <header className="absolute top-0 inset-x-0 z-30 bg-gradient-to-b from-slate-950/90 via-slate-950/65 to-transparent px-2.5 sm:px-4 py-1.5 sm:py-2.5 [@media(max-height:520px)]:py-1 flex flex-wrap items-center justify-between gap-2 sm:gap-3 pointer-events-none">
-        {/* Left: Clock, Date & Location */}
+        {/* Left: Clock, Date, Weather & Location */}
         <div className="flex items-center gap-2.5 sm:gap-4 pointer-events-auto">
           <div>
-            <div className="font-mono-num text-lg sm:text-2xl lg:text-3xl [@media(max-height:520px)]:text-lg font-bold leading-none text-white drop-shadow">
-              {formatGameTime(gameState.minutesOfDay)}
+            <div className="flex items-center gap-1.5">
+              <div className="font-mono-num text-lg sm:text-2xl lg:text-3xl [@media(max-height:520px)]:text-lg font-bold leading-none text-white drop-shadow">
+                {formatGameTime(gameState.minutesOfDay)}
+              </div>
+              {(() => {
+                const wMeta = WEATHER_META[gameState.weather];
+                const isNightLamps = currentHour >= 18.5 || currentHour < 5.1;
+                return (
+                  <span
+                    title={`${SEASON_META[gameState.season].label}: ${wMeta.label}${isNightLamps ? ' · Lampu Kampung Menyala' : ''}`}
+                    className={`px-1.5 sm:px-2 py-0.5 rounded-md border text-[9px] sm:text-[10px] font-bold whitespace-nowrap ${wMeta.badgeBg} ${wMeta.badgeText}`}
+                  >
+                    {isNightLamps && !wMeta.isRainy ? '🌙' : wMeta.emoji}{' '}
+                    <span className="hidden sm:inline">{wMeta.label} · </span>
+                    {SEASON_META[gameState.season].shortLabel}
+                    {isNightLamps ? ' · 💡' : ''}
+                  </span>
+                );
+              })()}
             </div>
             <div className="text-[10px] sm:text-[11px] font-bold text-amber-200 tracking-wide mt-0.5">
               {formatGameDate(gameState.day)}
@@ -1521,6 +1599,8 @@ export default function App() {
         <PasarShopModal
           money={gameState.money}
           inventory={gameState.inventory}
+          season={gameState.season}
+          weather={gameState.weather}
           onCheckout={handlePasarCheckout}
           onClose={() => setActiveModal(null)}
         />

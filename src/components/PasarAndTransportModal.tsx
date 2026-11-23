@@ -3,10 +3,12 @@ import { Truck, Bus, ShoppingBag, ArrowRightLeft } from 'lucide-react';
 import {
   DELIVERY_OPTIONS,
   ITEMS,
+  SEASON_META,
   TRANSPORT_TO_PASAR_OPTIONS,
+  WEATHER_META,
   formatRupiah,
 } from '../data/gameData';
-import { VehicleType } from '../types/game';
+import { SeasonType, VehicleType, WeatherCondition } from '../types/game';
 import { useUiGamepadAction } from '../hooks/useGamepad';
 import { VehicleSprite } from './VehicleSprite';
 
@@ -101,6 +103,8 @@ export const TransportPasarModal: React.FC<TransportPasarModalProps> = ({
 interface PasarShopModalProps {
   money: number;
   inventory: Record<string, number>;
+  season: SeasonType;
+  weather: WeatherCondition;
   onCheckout: (cart: Record<string, number>, totalCost: number, ongkir: number, courierName: string) => void;
   onClose: () => void;
 }
@@ -108,6 +112,8 @@ interface PasarShopModalProps {
 export const PasarShopModal: React.FC<PasarShopModalProps> = ({
   money,
   inventory,
+  season,
+  weather,
   onCheckout,
   onClose,
 }) => {
@@ -167,7 +173,7 @@ export const PasarShopModal: React.FC<PasarShopModalProps> = ({
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
       <div className="w-full max-w-4xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-3.5 sm:p-5 md:p-6 shadow-2xl max-h-[94dvh] flex flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
           <div>
             <h2 className="font-display text-xl font-bold text-amber-200 flex items-center gap-2">
               <ShoppingBag className="w-5 h-5 text-amber-400" />
@@ -182,28 +188,58 @@ export const PasarShopModal: React.FC<PasarShopModalProps> = ({
           </div>
         </div>
 
+        <div
+          className={`mb-3 px-3 py-2 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2 ${WEATHER_META[weather].badgeBg} ${WEATHER_META[weather].badgeText}`}
+        >
+          <span className="font-bold">
+            {WEATHER_META[weather].emoji} {SEASON_META[season].label} · {WEATHER_META[weather].label}
+          </span>
+          <span className="text-[11px] opacity-95">{SEASON_META[season].advice}</span>
+        </div>
+
         {/* Item Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 overflow-y-auto pr-1 mb-4">
           {wholesaleItems.map((it, idx) => {
             const qty = cart[it.id] ?? 0;
             const currentStock = inventory[it.id] ?? 0;
             const isFocused = focusedIdx === idx;
+            const isHotSeason =
+              (season === 'hujan' && it.seasonTag === 'hujan') ||
+              (season === 'kemarau' && it.seasonTag === 'kemarau');
             return (
               <div
                 key={it.id}
                 onMouseEnter={() => setFocusedIdx(idx)}
                 className={`bg-slate-950/85 border rounded-xl p-3 flex items-center justify-between gap-2 transition-all ${
-                  isFocused ? 'border-amber-400 ally-focus' : 'border-slate-800'
+                  isFocused
+                    ? 'border-amber-400 ally-focus'
+                    : isHotSeason
+                    ? 'border-sky-400/60'
+                    : 'border-slate-800'
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-amber-100 truncate">
-                    {it.emojiIcon} {it.name}
+                  <div className="text-xs font-bold text-amber-100 truncate flex items-center gap-1">
+                    <span>
+                      {it.emojiIcon} {it.name}
+                    </span>
                   </div>
                   <div className="text-[11px] font-mono-num text-emerald-300">
                     Grosir: {formatRupiah(it.wholesalePrice)}
                   </div>
-                  <div className="text-[10px] text-slate-400">Stok warung: {currentStock}</div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
+                    <span>Stok warung: {currentStock}</span>
+                    {it.seasonTag === 'hujan' && (
+                      <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-bold">
+                        ☔ Musim Hujan
+                      </span>
+                    )}
+                    {it.seasonTag === 'kemarau' && (
+                      <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">
+                        ☀️ Terik
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">

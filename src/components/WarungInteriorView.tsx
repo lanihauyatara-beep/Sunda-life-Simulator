@@ -15,6 +15,8 @@ import {
   CUSTOMER_ARCHETYPES,
   ITEMS,
   ITEM_MAP,
+  SEASON_META,
+  WEATHER_META,
   formatGameTime,
   formatRupiah,
 } from '../data/gameData';
@@ -74,6 +76,11 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
   const hour = gameState.minutesOfDay / 60;
   const withinOperatingHours = hour >= 9 && hour < 17;
   const warungItems = ITEMS.filter((i) => i.category === 'warung' || i.category === 'hasil_alam');
+  const weatherMeta = WEATHER_META[gameState.weather];
+  const seasonMeta = SEASON_META[gameState.season];
+  const isRainyWeather = gameState.weather === 'hujan' || gameState.weather === 'gerimis';
+  const isHujanSeason = gameState.season === 'hujan';
+  const isTerikSeason = gameState.season === 'kemarau' || gameState.weather === 'terik';
 
   const scheduleNextBuyerCooldown = (isInitialOpen: boolean) => {
     const delayMs = computeBuyerDelayMs(
@@ -116,11 +123,39 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
       buyerCooldownBySlot.delete(gameState.slotId);
       setWaitState(null);
 
-      const availableIds = warungItems
-        .filter((i) => (gameState.inventory[i.id] ?? 0) > 0)
-        .map((i) => i.id);
+      // Sesuaikan permintaan pembeli dengan musim & cuaca (hujan -> jas hujan, payung, bandrek; terik -> es cendol, teh, caping)
+      const weightedPool: string[] = [];
+      for (const item of warungItems) {
+        const stock = gameState.inventory[item.id] ?? 0;
+        if (stock <= 0) continue;
 
-      const pool = availableIds.length > 0 ? availableIds : ['kopi_kapal', 'gorengan', 'mie_instan'];
+        let weight = 1;
+        if (isRainyWeather || isHujanSeason) {
+          if (item.seasonTag === 'hujan') weight = isRainyWeather ? 5 : 3;
+          else if (item.id === 'kopi_kapal' || item.id === 'mie_instan' || item.id === 'gorengan') weight = 2;
+          else if (item.seasonTag === 'kemarau') weight = isRainyWeather ? 0 : 1;
+        } else if (isTerikSeason) {
+          if (item.seasonTag === 'kemarau') weight = gameState.weather === 'terik' ? 5 : 3;
+          else if (item.id === 'galon_air' || item.id === 'buah_kebun') weight = 2;
+          else if (item.seasonTag === 'hujan') weight = 0;
+        }
+
+        for (let w = 0; w < weight; w++) {
+          weightedPool.push(item.id);
+        }
+      }
+
+      // Saat hujan/musim hujan, sesekali warga tetap mencari Jas Hujan / Payung meski stok habis agar pemain terdorong kulakan
+      if (isRainyWeather && Math.random() < 0.35) {
+        weightedPool.push('jas_hujan', 'jas_hujan', 'payung_lipat', 'bandrek_hangat');
+      }
+
+      const fallbackPool =
+        isRainyWeather || isHujanSeason
+          ? ['jas_hujan', 'bandrek_hangat', 'kopi_kapal', 'mie_instan']
+          : ['es_cendol', 'teh_manis', 'kopi_kapal', 'gorengan'];
+      const pool = weightedPool.length > 0 ? weightedPool : fallbackPool;
+
       const arch = CUSTOMER_ARCHETYPES[Math.floor(Math.random() * CUSTOMER_ARCHETYPES.length)];
       const count = 1 + Math.floor(Math.random() * 2);
       const picked: { itemId: string; qty: number }[] = [];
@@ -132,14 +167,31 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
         else picked.push({ itemId: id, qty: 1 });
       }
 
+      const asksRainGear = picked.some(
+        (p) => p.itemId === 'jas_hujan' || p.itemId === 'payung_lipat' || p.itemId === 'bandrek_hangat'
+      );
+      const asksSummerGear = picked.some(
+        (p) => p.itemId === 'es_cendol' || p.itemId === 'caping_bambu' || p.itemId === 'teh_manis'
+      );
+
+      let greeting = arch.greeting;
+      let greetingId = arch.greetingId;
+      if ((isRainyWeather || isHujanSeason) && asksRainGear) {
+        greeting = 'Hujan kieu mah tiis pisan Ga! Aya jas hujan, payung, atanapi bandrek haneut?';
+        greetingId = 'Hujan begini dingin sekali Ga! Ada jas hujan, payung, atau bandrek hangat?';
+      } else if (gameState.weather === 'terik' && asksSummerGear) {
+        greeting = 'Panas mentrang-mentring kieu Ga! Mésér nu seger-seger atanapi caping nya.';
+        greetingId = 'Panas terik sekali begini Ga! Beli yang segar-segar atau caping ya.';
+      }
+
       setCurrentOrder({
         id: `ord_${Date.now()}`,
         customerName: arch.name,
         customerRole: arch.role,
         shirtColor: arch.shirtColor,
         hatType: arch.hatType,
-        greeting: arch.greeting,
-        greetingId: arch.greetingId,
+        greeting,
+        greetingId,
         items: picked,
         fulfilled: {},
         patience: 100,
@@ -284,18 +336,25 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
               <Store className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-display text-lg font-bold text-amber-50">
                   Warung Arga · {gameState.warungOpen ? 'BUKA MELAYANI' : 'TUTUP'}
                 </h2>
                 <span className="text-xs font-mono-num text-amber-300">
                   ({formatGameTime(gameState.minutesOfDay)} WIB)
                 </span>
+                <span
+                  className={`px-2 py-0.5 rounded-md border text-[10px] font-bold ${weatherMeta.badgeBg} ${weatherMeta.badgeText}`}
+                >
+                  {weatherMeta.emoji} {weatherMeta.label} · {seasonMeta.shortLabel}
+                </span>
               </div>
-              <p className="text-xs text-slate-300 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-0.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>
-                  Toko milik Arga · Jam buka resmi: <strong>09.00 – 17.00 WIB</strong> (otomatis tutup saat Adzan)
+                  {isHujanSeason
+                    ? 'Musim Hujan: Jas Hujan, Payung & Bandrek sedang laris manis!'
+                    : 'Musim Kemarau: Es Cendol, Teh Manis & Caping banyak dicari warga!'}
                 </span>
               </p>
             </div>
@@ -499,7 +558,19 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
                         </span>
                       </div>
                       <div className="text-xs font-bold truncate">{item.name}</div>
-                      <div className="text-[11px] font-mono-num text-amber-300">{formatRupiah(price)}</div>
+                      <div className="flex items-center justify-between gap-1 mt-0.5">
+                        <span className="text-[11px] font-mono-num text-amber-300">{formatRupiah(price)}</span>
+                        {item.seasonTag === 'hujan' && (
+                          <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[9px] font-bold">
+                            ☔ Hujan
+                          </span>
+                        )}
+                        {item.seasonTag === 'kemarau' && (
+                          <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold">
+                            ☀️ Terik
+                          </span>
+                        )}
+                      </div>
                     </button>
                   );
                 })}

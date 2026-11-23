@@ -8,9 +8,11 @@ import {
   RankTierName,
   SceneDef,
   SceneId,
+  SeasonType,
   SideJobDef,
   TraditionDef,
   VehicleType,
+  WeatherCondition,
 } from '../types/game';
 
 export const ASSETS = {
@@ -187,6 +189,118 @@ export function formatGameDate(day: number): string {
   return `${hari}, ${tanggal} ${bulan}`;
 }
 
+export const SEASON_META: Record<
+  SeasonType,
+  { label: string; shortLabel: string; advice: string }
+> = {
+  kemarau: {
+    label: 'Musim Kemarau (Terik)',
+    shortLabel: 'Kemarau',
+    advice: 'Siang cenderung terik. Warga banyak mencari Es Cendol, Teh Manis & Caping.',
+  },
+  hujan: {
+    label: 'Musim Hujan',
+    shortLabel: 'Musim Hujan',
+    advice: 'Hujan turun berkala (tidak terus-menerus). Warga banyak mencari Jas Hujan, Payung & Bandrek.',
+  },
+};
+
+export const WEATHER_META: Record<
+  WeatherCondition,
+  { label: string; emoji: string; badgeBg: string; badgeText: string; isRainy: boolean }
+> = {
+  terik: {
+    label: 'Panas Terik',
+    emoji: '☀️',
+    badgeBg: 'bg-amber-500/20 border-amber-400/70',
+    badgeText: 'text-amber-200',
+    isRainy: false,
+  },
+  cerah: {
+    label: 'Cerah Sejuk',
+    emoji: '🌤️',
+    badgeBg: 'bg-sky-500/20 border-sky-300/60',
+    badgeText: 'text-sky-100',
+    isRainy: false,
+  },
+  mendung: {
+    label: 'Berawan / Mendung',
+    emoji: '⛅',
+    badgeBg: 'bg-slate-700/75 border-slate-400/60',
+    badgeText: 'text-slate-200',
+    isRainy: false,
+  },
+  gerimis: {
+    label: 'Gerimis Ringan',
+    emoji: '🌦️',
+    badgeBg: 'bg-cyan-900/75 border-cyan-400/70',
+    badgeText: 'text-cyan-200',
+    isRainy: true,
+  },
+  hujan: {
+    label: 'Hujan Turun',
+    emoji: '🌧️',
+    badgeBg: 'bg-blue-900/80 border-sky-400/80',
+    badgeText: 'text-sky-100',
+    isRainy: true,
+  },
+};
+
+export function pickRandomSeason(): SeasonType {
+  return Math.random() < 0.5 ? 'hujan' : 'kemarau';
+}
+
+export function rollNextWeather(
+  season: SeasonType,
+  currentWeather: WeatherCondition,
+  minutesOfDay: number
+): { weather: WeatherCondition; durationMin: number } {
+  const hour = (minutesOfDay / 60) % 24;
+  const isDaytimePeak = hour >= 10 && hour < 15.5;
+
+  if (season === 'hujan') {
+    // Walaupun musim hujan, hujan tidak turun terus-menerus: selang-seling hujan/gerimis dan reda (mendung/cerah)
+    const wasRainy = currentWeather === 'hujan' || currentWeather === 'gerimis';
+    const r = Math.random();
+    if (wasRainy) {
+      // Setelah hujan/gerimis, mayoritas mereda menjadi mendung atau cerah berawan
+      if (r < 0.52) return { weather: 'mendung', durationMin: 80 + Math.floor(Math.random() * 65) };
+      if (r < 0.85) return { weather: 'cerah', durationMin: 75 + Math.floor(Math.random() * 60) };
+      return { weather: 'gerimis', durationMin: 55 + Math.floor(Math.random() * 45) };
+    }
+    // Dari mendung/cerah di musim hujan -> bisa turun hujan/gerimis atau tetap mendung
+    if (r < 0.36) return { weather: 'hujan', durationMin: 60 + Math.floor(Math.random() * 55) };
+    if (r < 0.65) return { weather: 'gerimis', durationMin: 50 + Math.floor(Math.random() * 50) };
+    if (r < 0.88) return { weather: 'mendung', durationMin: 70 + Math.floor(Math.random() * 60) };
+    return { weather: 'cerah', durationMin: 75 + Math.floor(Math.random() * 55) };
+  }
+
+  // Musim Kemarau: siang dominan terik, pagi/sore cerah atau sesekali berawan tipis
+  const r = Math.random();
+  if (isDaytimePeak) {
+    if (r < 0.76) return { weather: 'terik', durationMin: 110 + Math.floor(Math.random() * 75) };
+    if (r < 0.92) return { weather: 'cerah', durationMin: 95 + Math.floor(Math.random() * 60) };
+    return { weather: 'mendung', durationMin: 60 + Math.floor(Math.random() * 45) };
+  }
+  if (r < 0.68) return { weather: 'cerah', durationMin: 110 + Math.floor(Math.random() * 80) };
+  if (r < 0.88) return { weather: 'terik', durationMin: 90 + Math.floor(Math.random() * 60) };
+  return { weather: 'mendung', durationMin: 65 + Math.floor(Math.random() * 45) };
+}
+
+export function rollInitialSeasonAndWeather(minutesOfDay: number): {
+  season: SeasonType;
+  weather: WeatherCondition;
+  weatherRemainingMin: number;
+} {
+  const season = pickRandomSeason();
+  const rolled = rollNextWeather(season, 'mendung', minutesOfDay);
+  return {
+    season,
+    weather: rolled.weather,
+    weatherRemainingMin: rolled.durationMin,
+  };
+}
+
 export const PRAYER_SCHEDULE: { name: PrayerName; minutes: number; label: string; info: string }[] = [
   {
     name: 'Subuh',
@@ -237,9 +351,10 @@ export const ITEMS: ItemDef[] = [
     name: 'Teh Celup / Botol',
     sundaName: 'Enteh Amis',
     category: 'warung',
+    seasonTag: 'kemarau',
     wholesalePrice: 2500,
     retailPrice: 4000,
-    description: 'Minuman teh segar penghilang dahaga.',
+    description: 'Minuman teh segar penghilang dahaga saat terik.',
     emojiIcon: '🧋',
   },
   {
@@ -337,10 +452,78 @@ export const ITEMS: ItemDef[] = [
     name: 'Bajigur Hangat',
     sundaName: 'Bajigur',
     category: 'warung',
+    seasonTag: 'hujan',
     wholesalePrice: 3500,
     retailPrice: 6000,
     description: 'Minuman gula aren & santan hangat khas Priangan.',
     emojiIcon: '🍵',
+  },
+  // Barang khusus musim hujan & cuaca terik (terjual sesuai cuaca & musim)
+  {
+    id: 'jas_hujan',
+    name: 'Jas Hujan Ponco',
+    sundaName: 'Jas Hujan',
+    category: 'warung',
+    seasonTag: 'hujan',
+    wholesalePrice: 10000,
+    retailPrice: 15000,
+    description: 'Jas hujan praktis anti bocor, sangat dicari pengendara saat musim hujan.',
+    emojiIcon: '🧥',
+  },
+  {
+    id: 'payung_lipat',
+    name: 'Payung Lipat',
+    sundaName: 'Payung Kampung',
+    category: 'warung',
+    seasonTag: 'hujan',
+    wholesalePrice: 22000,
+    retailPrice: 30000,
+    description: 'Payung lipat kuat untuk berteduh ketika hujan turun.',
+    emojiIcon: '☂️',
+  },
+  {
+    id: 'bandrek_hangat',
+    name: 'Bandrek Jahe Hangat',
+    sundaName: 'Bandrek Haneut',
+    category: 'warung',
+    seasonTag: 'hujan',
+    wholesalePrice: 3500,
+    retailPrice: 6000,
+    description: 'Minuman jahe merah, serai & gula aren penghangat tubuh saat hujan.',
+    emojiIcon: '🫖',
+  },
+  {
+    id: 'minyak_angin',
+    name: 'Minyak Kayu Putih',
+    sundaName: 'Minyak Kayu Bodas',
+    category: 'warung',
+    seasonTag: 'hujan',
+    wholesalePrice: 8000,
+    retailPrice: 12000,
+    description: 'Minyak hangat pencegah masuk angin sepulang kehujanan.',
+    emojiIcon: '🧴',
+  },
+  {
+    id: 'es_cendol',
+    name: 'Es Cendol Gula Aren',
+    sundaName: 'Es Cendol Dawet',
+    category: 'warung',
+    seasonTag: 'kemarau',
+    wholesalePrice: 4000,
+    retailPrice: 7000,
+    description: 'Cendol segar dengan santan & gula aren cair dingin untuk siang terik.',
+    emojiIcon: '🍧',
+  },
+  {
+    id: 'caping_bambu',
+    name: 'Topi Caping Bambu',
+    sundaName: 'Duduy / Caping',
+    category: 'warung',
+    seasonTag: 'kemarau',
+    wholesalePrice: 12000,
+    retailPrice: 18000,
+    description: 'Topi anyaman bambu pelindung terik matahari di sawah dan jalan.',
+    emojiIcon: '👒',
   },
   // Menu Warung Asih (Warung Ngopi & Makan Sunda untuk memulihkan energi Arga)
   {
@@ -359,11 +542,24 @@ export const ITEMS: ItemDef[] = [
     name: 'Bajigur & Surabi Kinca',
     sundaName: 'Bajigur & Surabi',
     category: 'ngopi',
+    seasonTag: 'hujan',
     wholesalePrice: 0,
     retailPrice: 8000,
     energyRestore: 35,
     description: 'Hangatkan badan sambil menyeruput bajigur manis & surabi hangat buatan Teh Asih.',
     emojiIcon: '🍵',
+  },
+  {
+    id: 'es_kelapa_asih',
+    name: 'Es Kelapa Muda Gula Aren',
+    sundaName: 'Dawegan Tiis',
+    category: 'ngopi',
+    seasonTag: 'kemarau',
+    wholesalePrice: 0,
+    retailPrice: 6000,
+    energyRestore: 28,
+    description: 'Kelapa muda segar pelepas dahaga saat cuaca terik di Warung Asih.',
+    emojiIcon: '🥥',
   },
   {
     id: 'makan_tutug',
@@ -1106,8 +1302,17 @@ export const NPCS: NpcDef[] = [
     name: 'Abah Karta',
     role: 'Sesepuh Petani Sawah',
     scene: 'sawah_lisung',
-    x: 28,
-    y: 48,
+    x: 24,
+    y: 43,
+    walkSpeed: 5.5,
+    patrolPath: [
+      { x: 24, y: 43, pauseSec: 4.5 }, // Saung Lisung
+      { x: 36, y: 50, pauseSec: 2.0 }, // Pematang Sawah
+      { x: 58, y: 50, pauseSec: 2.5 }, // Jembatan Sungai
+      { x: 75, y: 40, pauseSec: 4.5 }, // Kebun Buah Kampung
+      { x: 58, y: 50, pauseSec: 2.0 }, // Kembali lewat jembatan
+      { x: 28, y: 48, pauseSec: 3.0 }, // Dekat Saung Lisung
+    ],
     shirtColor: '#78350f',
     accentColor: '#fde68a',
     hatType: 'iket',
@@ -1154,8 +1359,18 @@ export const NPCS: NpcDef[] = [
     name: 'Ustaz Hidayat',
     role: 'Pengurus Masjid Al-Ikhlas',
     scene: 'kampung_warung',
-    x: 72,
-    y: 48,
+    x: 78,
+    y: 39,
+    walkSpeed: 6.2,
+    patrolPath: [
+      { x: 78, y: 39, pauseSec: 4.5 }, // Halaman Masjid Al-Ikhlas
+      { x: 58, y: 44, pauseSec: 2.0 }, // Jalan antara Masjid & Warung Asih
+      { x: 47, y: 46, pauseSec: 3.5 }, // Depan Warung Asih
+      { x: 39, y: 54, pauseSec: 1.5 }, // Simpang Warung
+      { x: 27, y: 55, pauseSec: 4.0 }, // Depan Warung Arga
+      { x: 39, y: 54, pauseSec: 1.5 },
+      { x: 72, y: 46, pauseSec: 2.5 }, // Gerbang Masjid
+    ],
     shirtColor: '#f8fafc',
     accentColor: '#059669',
     hatType: 'peci',
@@ -1198,12 +1413,81 @@ export const NPCS: NpcDef[] = [
     ],
   },
   {
+    id: 'kang_asep',
+    name: 'Kang Asep',
+    role: 'Warga & Pengantar Pesanan',
+    scene: 'kampung_warung',
+    x: 26,
+    y: 56,
+    walkSpeed: 7.2,
+    patrolPath: [
+      { x: 26, y: 56, pauseSec: 3.5 }, // Depan Warung Arga
+      { x: 18, y: 74, pauseSec: 3.5 }, // Halte Ke Pasar
+      { x: 34, y: 63, pauseSec: 1.5 }, // Trotoar Kampung
+      { x: 48, y: 47, pauseSec: 4.0 }, // Saung Warung Asih
+      { x: 64, y: 43, pauseSec: 2.0 }, // Arah Masjid
+      { x: 75, y: 40, pauseSec: 3.0 }, // Pelataran Masjid Al-Ikhlas
+      { x: 56, y: 46, pauseSec: 1.5 },
+      { x: 39, y: 55, pauseSec: 1.5 },
+    ],
+    shirtColor: '#0369a1',
+    accentColor: '#bae6fd',
+    hatType: 'topi',
+    greetings: [
+      'Sampurasun Ga! Abdi keur muter ti Warung Arga ka Warung Asih jeung Masjid, nganteurkeun titipan warga.',
+      'Wilujeng ngajalankeun usaha Warung Arga, Ga! Engké wengi hayu nganteur pesenan bareng!',
+    ],
+    greetingsId: [
+      'Permisi Ga! Saya sedang berkeliling dari Warung Arga ke Warung Asih dan Masjid, mengantar titipan warga.',
+      'Selamat menjalankan usaha Warung Arga, Ga! Nanti malam ayo antar pesanan bareng!',
+    ],
+    options: [
+      {
+        text: 'Rampes Kang Asep! Sing ati-ati di jalan mun meuntas rék ka Masjid.',
+        textId: 'Baik Kang Asep! Hati-hati di jalan kalau menyeberang mau ke Masjid.',
+        tone: 'ramah',
+        reputationDelta: 0.07,
+        satisfactionDelta: 5,
+        reply: 'Siap Ga! Nuhun geus diperhatikeun, engké Kang Asep sering ngaronda ka Warung Arga.',
+        replyId: 'Siap Ga! Terima kasih sudah diperhatikan, nanti Kang Asep sering mampir ke Warung Arga.',
+      },
+      {
+        text: 'Muhun Kang, mugia lancar kirimanana dinten ieu.',
+        textId: 'Iya Kang, semoga lancar kirimannya hari ini.',
+        tone: 'biasa',
+        reputationDelta: 0.02,
+        satisfactionDelta: 2,
+        reply: 'Aamiin, nuhun pisan Ga!',
+        replyId: 'Aamiin, terima kasih banyak Ga!',
+      },
+      {
+        text: 'Ulah lami teuing ngobrol di jalan Kang, bilih telat.',
+        textId: 'Jangan terlalu lama mengobrol di jalan Kang, nanti telat.',
+        tone: 'ketus',
+        reputationDelta: -0.05,
+        satisfactionDelta: -3,
+        reply: 'Oh muhun Ga, abdi langsung jalan deui atuh.',
+        replyId: 'Oh iya Ga, saya langsung jalan lagi deh.',
+      },
+    ],
+  },
+  {
     id: 'pak_rt_dedi',
     name: 'Pak RT Dedi',
     role: 'Ketua RT Kampung Sukamaju',
     scene: 'kompleks_warga',
-    x: 34,
-    y: 46,
+    x: 25,
+    y: 51,
+    walkSpeed: 6.0,
+    patrolPath: [
+      { x: 25, y: 51, pauseSec: 4.0 }, // Imah Pak RT
+      { x: 21, y: 60, pauseSec: 1.5 },
+      { x: 14, y: 70, pauseSec: 4.0 }, // Pos Ronda Kampung
+      { x: 25, y: 56, pauseSec: 1.5 },
+      { x: 40, y: 50, pauseSec: 1.5 },
+      { x: 49, y: 42, pauseSec: 3.5 }, // Depan Rumah Arga
+      { x: 40, y: 50, pauseSec: 1.5 },
+    ],
     shirtColor: '#1e3a8a',
     accentColor: '#fbbf24',
     hatType: 'peci',
@@ -1252,6 +1536,14 @@ export const NPCS: NpcDef[] = [
     scene: 'kompleks_warga',
     x: 68,
     y: 44,
+    walkSpeed: 6.4,
+    patrolPath: [
+      { x: 68, y: 44, pauseSec: 4.0 }, // Imah Warga Kanan
+      { x: 52, y: 43, pauseSec: 3.5 }, // Depan Rumah Arga
+      { x: 40, y: 56, pauseSec: 2.0 }, // Persimpangan Kompleks
+      { x: 56, y: 61, pauseSec: 3.5 }, // Imah Warga Bawah
+      { x: 68, y: 55, pauseSec: 2.0 },
+    ],
     shirtColor: '#be185d',
     accentColor: '#fbcfe8',
     hatType: 'kerudung',
@@ -1298,8 +1590,15 @@ export const NPCS: NpcDef[] = [
     name: 'Mang Ujang',
     role: 'Tukang Bangunan & Pekerja Kampung',
     scene: 'bumi_ageung',
-    x: 54,
-    y: 56,
+    x: 26,
+    y: 48,
+    walkSpeed: 6.6,
+    patrolPath: [
+      { x: 26, y: 48, pauseSec: 4.5 }, // Bale Patemon / Balai Desa
+      { x: 46, y: 56, pauseSec: 2.5 }, // Pelataran Tengah
+      { x: 66, y: 48, pauseSec: 4.5 }, // Bumi Ageung
+      { x: 54, y: 62, pauseSec: 2.5 }, // Halaman Adat
+    ],
     shirtColor: '#b45309',
     accentColor: '#fed7aa',
     hatType: 'topi',
@@ -1347,7 +1646,14 @@ export const NPCS: NpcDef[] = [
     role: 'Guru SD Negeri Sukamaju',
     scene: 'sekolah',
     x: 56,
-    y: 44,
+    y: 36,
+    walkSpeed: 6.2,
+    patrolPath: [
+      { x: 56, y: 36, pauseSec: 4.5 }, // Depan Ruang Kelas Utama
+      { x: 42, y: 46, pauseSec: 3.0 }, // Lapangan Upacara
+      { x: 35, y: 62, pauseSec: 3.5 }, // Dekat Gerbang / Halte Sekolah
+      { x: 60, y: 54, pauseSec: 3.0 }, // Sisi Kanan Halaman
+    ],
     shirtColor: '#0f766e',
     accentColor: '#ccfbf1',
     hatType: 'kerudung',
@@ -1394,8 +1700,16 @@ export const NPCS: NpcDef[] = [
     name: 'Aki Jaya',
     role: 'Penjaga Hutan Tutupan & Mata Air',
     scene: 'hutan_tutupan',
-    x: 34,
-    y: 54,
+    x: 26,
+    y: 47,
+    walkSpeed: 5.2,
+    patrolPath: [
+      { x: 26, y: 47, pauseSec: 4.5 }, // Pos Rimba Hutan Tutupan
+      { x: 34, y: 58, pauseSec: 2.5 }, // Tepi Jembatan Kayu
+      { x: 56, y: 62, pauseSec: 3.0 }, // Menyeberangi Jembatan
+      { x: 66, y: 62, pauseSec: 3.5 }, // Arah Area Air & Pancuran
+      { x: 34, y: 58, pauseSec: 2.0 },
+    ],
     shirtColor: '#1f2937',
     accentColor: '#d1fae5',
     hatType: 'iket',
@@ -1443,7 +1757,13 @@ export const NPCS: NpcDef[] = [
     role: 'Kusir Delman & Pedagang Pasar',
     scene: 'pasar',
     x: 56,
-    y: 36,
+    y: 34,
+    walkSpeed: 5.8,
+    patrolPath: [
+      { x: 56, y: 34, pauseSec: 4.5 }, // Kios Grosir Pasar Atas
+      { x: 61, y: 42, pauseSec: 4.0 }, // Kios Grosir Pasar Tengah
+      { x: 58, y: 52, pauseSec: 3.5 }, // Pinggir Area Muat Delman
+    ],
     shirtColor: '#92400e',
     accentColor: '#fde047',
     hatType: 'topi',
@@ -1720,12 +2040,15 @@ export function createInitialGameState(slotId = 1): GameState {
     defaultPrices[item.id] = item.retailPrice;
   }
 
+  const startMinutes = 7 * 60 + 30; // 07.30 WIB pagi (kesempatan kerja pagi sebelum buka jam 09.00)
+  const initialWeather = rollInitialSeasonAndWeather(startMinutes);
+
   return {
     slotId,
     playerName: 'Arga',
     warungName: 'Warung Arga',
     day: 1,
-    minutesOfDay: 7 * 60 + 30, // 07.30 WIB pagi (kesempatan kerja pagi sebelum buka jam 09.00)
+    minutesOfDay: startMinutes,
     money: 350000, // Modal awal realistis Rp 350.000
     debt: 0,
     debtRecords: [],
@@ -1754,6 +2077,12 @@ export function createInitialGameState(slotId = 1): GameState {
       surabi: 5,
       peuyeum: 3,
       bajigur: 5,
+      jas_hujan: 3,
+      payung_lipat: 2,
+      bandrek_hangat: 4,
+      minyak_angin: 2,
+      es_cendol: 4,
+      caping_bambu: 2,
     },
     customPrices: defaultPrices,
     prayedToday: ['Subuh'],
@@ -1789,6 +2118,9 @@ export function createInitialGameState(slotId = 1): GameState {
     totalPrayersCount: 1,
     totalActivitiesCount: 0,
     fruitPickedToday: false,
+    season: initialWeather.season,
+    weather: initialWeather.weather,
+    weatherRemainingMin: initialWeather.weatherRemainingMin,
     lastSavedAt: new Date().toISOString(),
   };
 }

@@ -9,14 +9,75 @@ import {
   SceneDef,
   SceneId,
   VehicleType,
+  WeatherCondition,
 } from '../types/game';
 import { VEHICLE_INFO } from '../data/gameData';
 import { CharacterSprite } from './CharacterAvatar';
 import { VehicleSprite } from './VehicleSprite';
 
+// Posisi lampu jalan, teras warung, dan jendela rumah yang menyala otomatis mulai jam 18.30 WIB
+const SCENE_LIGHT_POINTS: Partial<Record<SceneId, { x: number; y: number; radius: number }[]>> = {
+  kampung_warung: [
+    { x: 24, y: 42, radius: 130 }, // Teras Warung Arga
+    { x: 47, y: 34, radius: 115 }, // Lampu Warung Asih
+    { x: 79, y: 26, radius: 140 }, // Lentera Masjid Al-Ikhlas
+    { x: 35, y: 74, radius: 120 }, // Lampu Tiang Jalan 1
+    { x: 64, y: 50, radius: 115 }, // Lampu Tiang Jalan 2
+  ],
+  kompleks_warga: [
+    { x: 11, y: 50, radius: 105 }, // Pos Ronda
+    { x: 24, y: 34, radius: 120 }, // Rumah Pak RT
+    { x: 48, y: 24, radius: 130 }, // Rumah Arga
+    { x: 84, y: 46, radius: 115 }, // Imah Warga kanan
+    { x: 56, y: 74, radius: 115 }, // Imah Warga bawah
+  ],
+  sawah_lisung: [
+    { x: 18, y: 28, radius: 120 }, // Obor / Lampu Saung Lisung
+    { x: 48, y: 50, radius: 105 }, // Lentera Jembatan Sawah
+  ],
+  bumi_ageung: [
+    { x: 25, y: 31, radius: 130 }, // Lampu Bale Patemon
+    { x: 66, y: 28, radius: 145 }, // Lampu Bumi Ageung
+  ],
+  sekolah: [
+    { x: 18, y: 36, radius: 115 }, // Lampu Kelas Kiri
+    { x: 56, y: 18, radius: 135 }, // Lampu Gerbang Sekolah
+    { x: 82, y: 50, radius: 115 }, // Lampu Kelas Kanan
+  ],
+  hutan_tutupan: [
+    { x: 24, y: 42, radius: 110 }, // Lentera Pos Rimba
+  ],
+  area_air: [
+    { x: 76, y: 34, radius: 120 }, // Lentera Saung Pancuran
+  ],
+  pasar: [
+    { x: 16, y: 42, radius: 120 }, // Lampu Halte Pasar
+    { x: 76, y: 26, radius: 145 }, // Lampu Kios Grosir 1
+    { x: 84, y: 46, radius: 135 }, // Lampu Kios Grosir 2
+  ],
+};
+
+const RAIN_DROPS = Array.from({ length: 34 }, (_, idx) => ({
+  id: idx,
+  leftPct: ((idx * 29) % 100) + (idx % 3) * 0.4,
+  delaySec: -((idx * 0.17) % 1.4),
+  durationSec: 0.58 + (idx % 5) * 0.08,
+  heightPx: 14 + (idx % 4) * 5,
+}));
+
+interface LiveNpcState {
+  x: number;
+  y: number;
+  facing: 'left' | 'right';
+  isMoving: boolean;
+  wpIndex: number;
+  pauseUntil: number;
+}
+
 interface GameWorldCanvasProps {
   scene: SceneDef;
   minutesOfDay: number;
+  weather: WeatherCondition;
   playerPos: { x: number; y: number };
   facing: 'left' | 'right';
   isInjured: boolean;
@@ -176,6 +237,7 @@ function isPositionBlocked(x: number, y: number, obstacles?: RectObstacle[]): bo
 export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
   scene,
   minutesOfDay,
+  weather,
   playerPos,
   facing,
   isInjured,
@@ -211,6 +273,10 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
   const collisionCooldownRef = useRef(0);
   const lastParentSyncRef = useRef(0);
   const lastSceneIdRef = useRef(scene.id);
+
+  const liveNpcsRef = useRef<Record<string, LiveNpcState>>({});
+  const lastNpcSyncRef = useRef(0);
+  const [liveNpcs, setLiveNpcs] = useState<Record<string, LiveNpcState>>({});
 
   // Stable callback refs so RAF loop never tears down
   const onUpdatePlayerPosRef = useRef(onUpdatePlayerPos);
@@ -290,7 +356,34 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
     setVehicles(initial);
   }, [scene.id, scene.hasRoad, scene.roadPath, scene.allowedVehicles]);
 
-  // Main 60fps movement + solid obstacle collision + road-following traffic loop
+  // Initialize dynamic patrol state for NPCs in the active scene
+  useEffect(() => {
+    const now = performance.now();
+    const initialNpcs: Record<string, LiveNpcState> = {};
+
+    npcsInScene.forEach((npc, idx) => {
+      const hasPatrol = Boolean(npc.patrolPath && npc.patrolPath.length >= 2);
+      const nextWp = hasPatrol ? npc.patrolPath![1] : null;
+      const initialFacing: 'left' | 'right' =
+        nextWp && nextWp.x < npc.x ? 'left' : 'right';
+
+      initialNpcs[npc.id] = {
+        x: npc.x,
+        y: npc.y,
+        facing: initialFacing,
+        isMoving: false,
+        wpIndex: hasPatrol ? 1 : 0,
+        // Stagger start slightly so villagers begin walking smoothly across landmarks right away
+        pauseUntil: hasPatrol ? now + idx * 450 : 0,
+      };
+    });
+
+    liveNpcsRef.current = initialNpcs;
+    lastNpcSyncRef.current = now;
+    setLiveNpcs(initialNpcs);
+  }, [scene.id, npcsInScene]);
+
+  // Main 60fps movement + solid obstacle collision + road-following traffic + NPC patrol loop
   useEffect(() => {
     let rafId = 0;
     let lastTime = performance.now();
@@ -449,6 +542,100 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
             onVehicleCollisionRef.current(hitVehicle);
           }
         }
+
+        // 3. Dynamic NPC patrol movement between village landmarks
+        if (npcsInScene.length > 0) {
+          const nextNpcMap: Record<string, LiveNpcState> = {};
+          let anyNpcChanged = false;
+          let stateVisualChanged = false;
+
+          for (const npc of npcsInScene) {
+            const hasPatrol = Boolean(npc.patrolPath && npc.patrolPath.length >= 2);
+            const curr: LiveNpcState = liveNpcsRef.current[npc.id] ?? {
+              x: npc.x,
+              y: npc.y,
+              facing: 'right',
+              isMoving: false,
+              wpIndex: hasPatrol ? 1 : 0,
+              pauseUntil: 0,
+            };
+
+            const distToPlayer = Math.hypot(curr.x - posRef.current.x, curr.y - posRef.current.y);
+
+            if (distToPlayer < 10.5) {
+              // Politely pause and face Arga when player approaches to chat
+              const dxPlayer = posRef.current.x - curr.x;
+              const faceToPlayer: 'left' | 'right' =
+                Math.abs(dxPlayer) > 0.6 ? (dxPlayer < 0 ? 'left' : 'right') : curr.facing;
+              const nextState: LiveNpcState = {
+                ...curr,
+                isMoving: false,
+                facing: faceToPlayer,
+              };
+              if (curr.isMoving || curr.facing !== faceToPlayer) {
+                anyNpcChanged = true;
+                stateVisualChanged = true;
+              }
+              nextNpcMap[npc.id] = nextState;
+            } else if (hasPatrol && npc.patrolPath) {
+              if (now < curr.pauseUntil) {
+                if (curr.isMoving) {
+                  anyNpcChanged = true;
+                  stateVisualChanged = true;
+                }
+                nextNpcMap[npc.id] = { ...curr, isMoving: false };
+              } else {
+                const path = npc.patrolPath;
+                const wpIdx = curr.wpIndex % path.length;
+                const target = path[wpIdx];
+                const dx = target.x - curr.x;
+                const dy = target.y - curr.y;
+                const dist = Math.hypot(dx, dy);
+                const speed = npc.walkSpeed ?? 6.0;
+                const stepDist = speed * dt;
+
+                if (dist <= Math.max(0.45, stepDist)) {
+                  const nextWpIdx = (wpIdx + 1) % path.length;
+                  const pauseMs = (target.pauseSec ?? 3) * 1000;
+                  nextNpcMap[npc.id] = {
+                    x: target.x,
+                    y: target.y,
+                    facing: curr.facing,
+                    isMoving: false,
+                    wpIndex: nextWpIdx,
+                    pauseUntil: now + pauseMs,
+                  };
+                  anyNpcChanged = true;
+                  stateVisualChanged = true;
+                } else {
+                  const nx = curr.x + (dx / dist) * stepDist;
+                  const ny = curr.y + (dy / dist) * stepDist;
+                  const nextFacing: 'left' | 'right' =
+                    dx < -0.04 ? 'left' : dx > 0.04 ? 'right' : curr.facing;
+                  nextNpcMap[npc.id] = {
+                    ...curr,
+                    x: nx,
+                    y: ny,
+                    facing: nextFacing,
+                    isMoving: true,
+                  };
+                  anyNpcChanged = true;
+                  if (!curr.isMoving || curr.facing !== nextFacing) {
+                    stateVisualChanged = true;
+                  }
+                }
+              }
+            } else {
+              nextNpcMap[npc.id] = curr;
+            }
+          }
+
+          liveNpcsRef.current = nextNpcMap;
+          if (anyNpcChanged && (stateVisualChanged || now - lastNpcSyncRef.current >= 32)) {
+            lastNpcSyncRef.current = now;
+            setLiveNpcs(nextNpcMap);
+          }
+        }
       }
 
       rafId = requestAnimationFrame(step);
@@ -456,11 +643,16 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
 
     rafId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafId);
-  }, [isPaused, batterySaver, isInjured, scene.id, scene.hasRoad, scene.roadPath, scene.allowedVehicles, scene.obstacles, moveVecRef]);
+  }, [isPaused, batterySaver, isInjured, scene.id, scene.hasRoad, scene.roadPath, scene.allowedVehicles, scene.obstacles, npcsInScene, moveVecRef]);
 
-  // Compute nearest interactive NPC or Hotspot from renderPos
+  // Compute nearest interactive NPC or Hotspot from renderPos & live NPC coordinates
   const nearestNpc = npcsInScene
-    .map((n) => ({ npc: n, dist: Math.hypot(n.x - renderPos.x, n.y - renderPos.y) }))
+    .map((n) => {
+      const live = liveNpcs[n.id];
+      const nx = live?.x ?? n.x;
+      const ny = live?.y ?? n.y;
+      return { npc: n, dist: Math.hypot(nx - renderPos.x, ny - renderPos.y) };
+    })
     .filter((item) => item.dist < 15)
     .sort((a, b) => a.dist - b.dist)[0]?.npc;
 
@@ -491,16 +683,106 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
     }
   }, [nearestKey, scene.id]);
 
-  // Dynamic Time-of-Day atmospheric tint
+  // Dynamic Time-of-Day + Weather lighting:
+  // - 10.00-15.30 (jam 12 terik): cerah menyala hangat (atau mendung saat musim hujan)
+  // - 17.45-18.29 (jam 18.00 agak gelap): senja temaram, lampu mulai bersiap
+  // - >= 18.30 - 04.59 (jam 18.30 gelap & lampu sudah menyala): malam gelap + lampu jalan/rumah menyala hangat
   const hour = minutesOfDay / 60;
-  let timeOverlay = 'bg-transparent';
-  if (hour >= 18.2 || hour < 4.5) {
-    timeOverlay = 'bg-slate-950/45 mix-blend-multiply';
-  } else if (hour >= 16.5 && hour < 18.2) {
-    timeOverlay = 'bg-amber-600/20 mix-blend-soft-light';
-  } else if (hour >= 4.5 && hour < 6.5) {
-    timeOverlay = 'bg-indigo-900/20 mix-blend-soft-light';
+  const isRainyNow = !scene.isIndoor && (weather === 'hujan' || weather === 'gerimis');
+  const isCloudyNow = !scene.isIndoor && weather === 'mendung';
+  const isTerikDay = !scene.isIndoor && weather === 'terik' && hour >= 9.5 && hour < 15.8;
+
+  let backdropBrightness = 1;
+  let backdropSaturate = 1;
+  let timeTintStyle: React.CSSProperties = { background: 'transparent' };
+
+  if (hour >= 18.5 || hour < 4.75) {
+    // >= 18.30 WIB: Malam gelap dan lampu kampung mulai menyala terang
+    backdropBrightness = 0.48;
+    backdropSaturate = 0.85;
+    timeTintStyle = {
+      background:
+        'linear-gradient(180deg, rgba(2,6,23,0.68) 0%, rgba(15,23,42,0.52) 55%, rgba(2,6,23,0.62) 100%)',
+    };
+  } else if (hour >= 18.3 && hour < 18.5) {
+    // 18.18 - 18.29 WIB: Transisi cepat ke gelap
+    backdropBrightness = 0.6;
+    backdropSaturate = 0.9;
+    timeTintStyle = {
+      background:
+        'linear-gradient(180deg, rgba(15,23,42,0.56) 0%, rgba(49,46,129,0.34) 50%, rgba(15,23,42,0.48) 100%)',
+    };
+  } else if (hour >= 17.65 && hour < 18.3) {
+    // Sekitar jam 18.00 WIB: Agak gelap / senja Maghrib
+    backdropBrightness = 0.74;
+    backdropSaturate = 0.98;
+    timeTintStyle = {
+      background:
+        'linear-gradient(180deg, rgba(30,27,75,0.44) 0%, rgba(180,83,9,0.24) 55%, rgba(15,23,42,0.36) 100%)',
+    };
+  } else if (hour >= 16.0 && hour < 17.65) {
+    // Sore keemasan menjelang senja
+    backdropBrightness = isRainyNow ? 0.78 : 0.93;
+    backdropSaturate = isRainyNow ? 0.86 : 1.06;
+    timeTintStyle = isRainyNow
+      ? { background: 'rgba(15,23,42,0.28)' }
+      : {
+          background:
+            'linear-gradient(180deg, rgba(245,158,11,0.16) 0%, rgba(217,119,6,0.08) 100%)',
+        };
+  } else if (hour >= 4.75 && hour < 6.25) {
+    // Subuh / fajar menyingsing
+    backdropBrightness = 0.78;
+    backdropSaturate = 0.92;
+    timeTintStyle = {
+      background:
+        'linear-gradient(180deg, rgba(30,41,59,0.38) 0%, rgba(251,191,36,0.12) 100%)',
+    };
+  } else {
+    // Pagi - Siang (termasuk jam 12 siang)
+    if (isRainyNow) {
+      backdropBrightness = weather === 'hujan' ? 0.76 : 0.85;
+      backdropSaturate = 0.8;
+      timeTintStyle = {
+        background:
+          weather === 'hujan'
+            ? 'linear-gradient(180deg, rgba(15,23,42,0.42) 0%, rgba(30,58,138,0.24) 100%)'
+            : 'linear-gradient(180deg, rgba(30,41,59,0.28) 0%, rgba(51,65,85,0.16) 100%)',
+      };
+    } else if (isCloudyNow) {
+      backdropBrightness = 0.9;
+      backdropSaturate = 0.88;
+      timeTintStyle = { background: 'rgba(51,65,85,0.20)' };
+    } else if (isTerikDay) {
+      backdropBrightness = 1.09;
+      backdropSaturate = 1.1;
+      timeTintStyle = {
+        background:
+          'radial-gradient(circle at 86% 10%, rgba(254,240,138,0.34) 0%, rgba(251,191,36,0.12) 34%, transparent 70%)',
+      };
+    }
   }
+
+  // Lampu jalan & rumah menyala penuh saat >= 18.30 (18.5 jam), redup transisi saat 18.24-18.30
+  const lightsOpacity =
+    hour >= 18.5 || hour < 5.1
+      ? 1
+      : hour >= 18.3
+      ? 0.55
+      : hour >= 5.1 && hour < 5.6
+      ? 0.4
+      : 0;
+  const lightPoints = !scene.isIndoor && lightsOpacity > 0 ? SCENE_LIGHT_POINTS[scene.id] ?? [] : [];
+  const rainDropsCount =
+    weather === 'hujan'
+      ? batterySaver
+        ? 16
+        : 34
+      : weather === 'gerimis'
+      ? batterySaver
+        ? 8
+        : 16
+      : 0;
 
   const nearRoad =
     scene.hasRoad &&
@@ -547,17 +829,69 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
       onClick={handleStageClick}
       className="relative isolate z-0 w-full h-full overflow-hidden bg-slate-950 cursor-crosshair select-none"
     >
-      {/* Background Isometric Diorama */}
+      {/* Background Isometric Diorama with dynamic brightness/saturation for Terik / Senja / Malam */}
       <img
         src={scene.bgImage}
         alt={scene.name}
         referrerPolicy="no-referrer"
-        style={{ objectPosition: scene.bgPosition ?? '50% 50%' }}
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300"
+        style={{
+          objectPosition: scene.bgPosition ?? '50% 50%',
+          filter: `brightness(${backdropBrightness}) saturate(${backdropSaturate})`,
+        }}
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-all duration-1000"
       />
 
-      {/* Atmospheric Time of Day Layer */}
-      <div className={`absolute inset-0 pointer-events-none transition-colors duration-1000 ${timeOverlay}`} />
+      {/* Atmospheric Time-of-Day & Weather Tint Layer */}
+      <div
+        style={timeTintStyle}
+        className="absolute inset-0 pointer-events-none transition-all duration-1000"
+      />
+
+      {/* Village Street & House Lamps (Automatically illuminate starting 18.30 WIB until dawn) */}
+      {lightPoints.length > 0 && (
+        <div
+          style={{ opacity: lightsOpacity }}
+          className="absolute inset-0 pointer-events-none transition-opacity duration-1000"
+        >
+          {lightPoints.map((lp, idx) => (
+            <div
+              key={idx}
+              style={{
+                left: `${lp.x}%`,
+                top: `${lp.y}%`,
+                width: `${lp.radius * 2}px`,
+                height: `${lp.radius * 2}px`,
+                background:
+                  'radial-gradient(circle, rgba(253,224,71,0.52) 0%, rgba(245,158,11,0.22) 38%, rgba(217,119,6,0) 72%)',
+              }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full mix-blend-screen"
+            >
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-amber-200 shadow-[0_0_14px_4px_rgba(251,191,36,0.95)]" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Animated Rain Streaks during Rainy Spells (non-continuous rain in Musim Hujan) */}
+      {rainDropsCount > 0 && (
+        <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden">
+          {RAIN_DROPS.slice(0, rainDropsCount).map((drop) => (
+            <span
+              key={drop.id}
+              style={{
+                left: `${drop.leftPct}%`,
+                top: '-10%',
+                height: `${drop.heightPx}px`,
+                animationDelay: `${drop.delaySec}s`,
+                animationDuration: `${drop.durationSec}s`,
+              }}
+              className={`sunda-rain-drop absolute w-[1.5px] rounded-full ${
+                weather === 'hujan' ? 'bg-sky-200/75' : 'bg-sky-200/45'
+              }`}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Road Warning indicator when Arga is close to active traffic */}
       {!isPaused && nearRoad && (
@@ -631,6 +965,11 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
       {npcsInScene.map((npc) => {
         const greeted = greetedNpcsToday.includes(npc.id);
         const isNear = nearestNpc?.id === npc.id;
+        const live = liveNpcs[npc.id];
+        const nx = live?.x ?? npc.x;
+        const ny = live?.y ?? npc.y;
+        const npcFacing = live?.facing ?? 'right';
+        const npcMoving = !isPaused && Boolean(live?.isMoving);
         return (
           <button
             key={npc.id}
@@ -638,7 +977,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
               e.stopPropagation();
               onTalkNpc(npc);
             }}
-            style={{ left: `${npc.x}%`, top: `${npc.y}%`, zIndex: Math.round(npc.y) }}
+            style={{ left: `${nx}%`, top: `${ny}%`, zIndex: Math.round(ny) }}
             className="absolute -translate-x-1/2 -translate-y-3/4 group cursor-pointer"
           >
             {!isPaused && (
@@ -659,6 +998,8 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
               shirtColor={npc.shirtColor}
               accentColor={npc.accentColor}
               hatType={npc.hatType}
+              facing={npcFacing}
+              isMoving={npcMoving}
             />
           </button>
         );
