@@ -638,7 +638,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
               { id: 'cuaca' as const, label: 'Cuaca 3 Hari' },
               { id: 'ulasan' as const, label: 'Ulasan' },
               { id: 'tradisi' as const, label: 'Adat & Sholat' },
-              { id: 'kontroler' as const, label: 'ROG Ally' },
+              { id: 'kontroler' as const, label: 'Controller' },
             ].map((t) => (
               <button
                 key={t.id}
@@ -1094,7 +1094,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
           {tab === 'kontroler' && (
             <div className="bg-slate-950 border border-amber-400/40 rounded-xl p-4 text-xs text-slate-300 space-y-2">
               <div className="font-bold text-amber-300 flex items-center gap-2 text-sm">
-                <Gamepad2 className="w-4 h-4" /> Kontrol ASUS ROG Ally (Gamepad Mode)
+                <Gamepad2 className="w-4 h-4" /> Kontrol Controller (Gamepad Mode)
               </div>
               <div>• <strong>Left Stick / D-Pad</strong>: Jalan di Kampung & navigasi menu</div>
               <div>• <strong>Tombol A</strong>: Sapa Warga terdekat / Masuk Gedung / Layani Pembeli</div>

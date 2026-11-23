@@ -327,6 +327,19 @@ export default function App() {
     }
   }, [settings]);
 
+  // Unlock browser audio cleanly on first user interaction so ambient crickets/rooster start promptly
+  useEffect(() => {
+    const onFirstInteract = () => {
+      soundEngine.unlock();
+    };
+    window.addEventListener('pointerdown', onFirstInteract, { passive: true });
+    window.addEventListener('keydown', onFirstInteract, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', onFirstInteract);
+      window.removeEventListener('keydown', onFirstInteract);
+    };
+  }, []);
+
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
   }, []);
@@ -545,6 +558,7 @@ export default function App() {
 
   const handleExitToCover = useCallback(() => {
     soundEngine.stopAdzan();
+    soundEngine.stopMorningAndNightRealAudio();
     soundEngine.click();
     saveGameToSlot(gameStateRef.current);
     setActiveModal(null);
@@ -1001,6 +1015,7 @@ export default function App() {
       };
       setGameState(nextState);
       saveGameToSlot(nextState);
+      soundEngine.playRooster(0.75);
       showToast(
         `Selamat pagi, ${formatGameDate(nextDay)}! Jam 04.30 WIB · ${SEASON_META[nextSeason].label} (${WEATHER_META[morningWeather.weather].label}). Energi 100% (+12 Poin).`
       );
@@ -1263,7 +1278,7 @@ export default function App() {
     return SIDE_JOBS.filter((j) => j.period === 'malam');
   }, [currentHour]);
 
-  // ASUS ROG Ally Gamepad & Keyboard Event Handler
+  // Controller & Keyboard Event Handler
   const handleGamepadButton = useCallback(
     (btn: GamepadActionEvent extends never ? never : keyof GamepadActionEvent) => {
       if (screen === 'COVER') {
@@ -1921,7 +1936,7 @@ export default function App() {
               <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950/80 border border-slate-700 text-[11px] text-slate-300">
                 <Gamepad2 className="w-4 h-4 text-amber-400" />
                 <span>
-                  {gamepadStatus.connected ? 'ROG Ally Terhubung' : 'Gamepad Siap'} · [A] Aksi · [X] HP · [Y] Peta
+                  {gamepadStatus.connected ? 'Controller Terhubung' : 'Controller Siap'} · [A] Aksi · [X] HP · [Y] Peta
                 </span>
               </div>
             )}

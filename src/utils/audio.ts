@@ -46,6 +46,9 @@ class SoundEngine {
   private isAudioUnlocked = false;
   private adzanAudio: HTMLAudioElement | null = null;
   private bedukTimerId: number | null = null;
+  private cricketsAudio: HTMLAudioElement | null = null;
+  private roosterAudio: HTMLAudioElement | null = null;
+  private lastRoosterPlayedAt = 0;
 
   private ensureContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -64,6 +67,14 @@ class SoundEngine {
       this.isAudioUnlocked = true;
     }
     return this.ctx;
+  }
+
+  public unlock() {
+    this.ensureContext();
+    this.isAudioUnlocked = true;
+    if (this.lastEnvState) {
+      this.updateCricketsLayer(this.lastEnvState);
+    }
   }
 
   private getNoiseBuffer(ctx: AudioContext): AudioBuffer {
@@ -263,9 +274,106 @@ class SoundEngine {
     src.stop(now + duration + 0.03);
   }
 
+  private computeCricketsVolume(state: EnvironmentAudioState): number {
+    if (!state.active || this.ambientVolume <= 0.01) return 0;
+    if (state.weather === 'hujan') return 0;
+    const hour = ((state.minutesOfDay / 60) % 24 + 24) % 24;
+    const isNight = hour >= 18.0 || hour < 5.0;
+    if (!isNight) return 0;
+
+    let base = state.isIndoor ? 0.14 : 0.36;
+    if (state.sceneId === 'hutan_tutupan' || state.sceneId === 'sawah_lisung') {
+      base = 0.44;
+    } else if (state.sceneId === 'pasar') {
+      base = 0.18;
+    }
+    if (state.weather === 'gerimis') {
+      base *= 0.55;
+    }
+    return Math.max(0, Math.min(1, base * this.ambientVolume));
+  }
+
+  private updateCricketsLayer(state: EnvironmentAudioState) {
+    if (typeof window === 'undefined') return;
+    const targetVol = this.computeCricketsVolume(state);
+
+    if (targetVol <= 0.005) {
+      if (this.cricketsAudio && !this.cricketsAudio.paused) {
+        this.cricketsAudio.pause();
+      }
+      return;
+    }
+
+    try {
+      if (!this.cricketsAudio) {
+        this.cricketsAudio = new Audio('/audio/crickets.mp3');
+        this.cricketsAudio.loop = true;
+        this.cricketsAudio.preload = 'auto';
+      }
+      this.cricketsAudio.volume = targetVol;
+      if (this.cricketsAudio.paused) {
+        const p = this.cricketsAudio.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(() => {
+            // Will resume on next user interaction / unlock
+          });
+        }
+      }
+    } catch {
+      // ignore audio element error
+    }
+  }
+
+  /**
+   * Plays authentic morning village rooster crowing (/audio/rooster.mp3)
+   */
+  public playRooster(scale = 1) {
+    if (typeof window === 'undefined') return;
+    const volScale = Math.max(this.ambientVolume, this.sfxVolume * 0.45);
+    if (volScale <= 0.01) return;
+    const nowMs = Date.now();
+    if (nowMs - this.lastRoosterPlayedAt < 6000) return;
+    this.lastRoosterPlayedAt = nowMs;
+
+    try {
+      if (!this.roosterAudio) {
+        this.roosterAudio = new Audio('/audio/rooster.mp3');
+        this.roosterAudio.preload = 'auto';
+      }
+      this.roosterAudio.currentTime = 0;
+      this.roosterAudio.volume = Math.max(0, Math.min(1, 0.46 * volScale * scale));
+      const p = this.roosterAudio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          // ignore autoplay block
+        });
+      }
+    } catch {
+      // ignore audio element error
+    }
+  }
+
+  public stopMorningAndNightRealAudio() {
+    if (this.cricketsAudio && !this.cricketsAudio.paused) {
+      this.cricketsAudio.pause();
+    }
+    if (this.roosterAudio && !this.roosterAudio.paused) {
+      this.roosterAudio.pause();
+      this.roosterAudio.currentTime = 0;
+    }
+  }
+
   public syncVolumes() {
     if (this.adzanAudio) {
       this.adzanAudio.volume = Math.max(0, Math.min(1, this.sfxVolume));
+    }
+    if (this.lastEnvState) {
+      this.updateCricketsLayer(this.lastEnvState);
+    }
+    if (this.roosterAudio && !this.roosterAudio.paused) {
+      const volScale = Math.max(this.ambientVolume, this.sfxVolume * 0.45);
+      const indoorFactor = this.lastEnvState?.isIndoor ? 0.45 : 1;
+      this.roosterAudio.volume = Math.max(0, Math.min(1, 0.46 * volScale * indoorFactor));
     }
     if (!this.ctx || !this.ambientMasterGain) return;
     const target = this.lastEnvState?.active ? this.ambientVolume : 0;
@@ -285,6 +393,22 @@ class SoundEngine {
       this.isAudioUnlocked
     ) {
       this.rainTransition(prev.weather, state.weather, state.isIndoor);
+    }
+
+    // Real night crickets audio loop (/audio/crickets.mp3)
+    this.updateCricketsLayer(state);
+
+    // Real morning rooster crowing (/audio/rooster.mp3) when dawn/morning arrives (04.30 - 08.30 WIB)
+    if (state.active && state.weather !== 'hujan') {
+      const hour = ((state.minutesOfDay / 60) % 24 + 24) % 24;
+      const prevHour = prev ? ((prev.minutesOfDay / 60) % 24 + 24) % 24 : -1;
+      const isMorning = hour >= 4.5 && hour < 8.5;
+      const enteredMorning = isMorning && (!prev?.active || prevHour < 4.5 || prevHour >= 8.5);
+      if (enteredMorning) {
+        this.playRooster(state.isIndoor ? 0.45 : 0.95);
+      }
+    } else if (!state.active) {
+      this.stopMorningAndNightRealAudio();
     }
 
     if (!this.ensureAmbientGraph() || !this.ctx) return;
@@ -358,21 +482,29 @@ class SoundEngine {
       const env = this.lastEnvState;
       if (!env || !env.active || this.ambientVolume <= 0.01 || !this.isAudioUnlocked) return;
 
-      const hour = env.minutesOfDay / 60;
-      const isNight = hour >= 18.5 || hour < 5.0;
+      const hour = ((env.minutesOfDay / 60) % 24 + 24) % 24;
+      const isNight = hour >= 18.0 || hour < 5.0;
+      const isMorning = hour >= 4.5 && hour < 8.5;
+
+      // Ensure real cricket audio keeps running smoothly at night if unlocked after entering night
+      if (isNight) {
+        this.updateCricketsLayer(env);
+      }
 
       // Pasar accents are handled by the dedicated setPasarAmbience / ensurePasarTicker engine
       if (env.sceneId === 'pasar') return;
 
-      // River & forest subtle bird chirps / night crickets
+      // Real morning village rooster crowing periodically during early morning (04.30 - 08.30 WIB)
+      if (isMorning && env.weather !== 'hujan' && Date.now() - this.lastRoosterPlayedAt >= 26000) {
+        if (Math.random() < 0.55) {
+          this.playRooster(env.isIndoor ? 0.45 : 0.9);
+          return;
+        }
+      }
+
+      // Forest & river subtle daytime bird chirps
       if (!env.isIndoor && env.weather !== 'hujan') {
-        if (isNight && Math.random() < 0.45) {
-          // Subtle Sundanese village evening cricket trill
-          const baseFreq = 3200 + Math.random() * 400;
-          this.playTone(baseFreq, 0.045, 'sine', 0.012, 0, true);
-          this.playTone(baseFreq + 90, 0.045, 'sine', 0.011, 0.07, true);
-          this.playTone(baseFreq, 0.05, 'sine', 0.01, 0.14, true);
-        } else if (
+        if (
           !isNight &&
           (env.sceneId === 'hutan_tutupan' ||
             env.sceneId === 'sawah_lisung' ||
@@ -385,7 +517,7 @@ class SoundEngine {
           this.playTone(f1 * 1.18, 0.08, 'sine', 0.012, 0.08, true);
         }
       }
-    }, 2800);
+    }, 3500);
   }
 
   private stopAmbientTicker() {

@@ -84,7 +84,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed mb-3">
-              Seret = tahan barang lalu seret ke kresek. Klik = cukup klik barangnya (atau tekan [A] di ROG Ally),
+              Seret = tahan barang lalu seret ke kresek. Klik = cukup klik barangnya (atau tekan [A] di Controller),
               langsung masuk kresek.
             </p>
             <button
@@ -95,7 +95,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   : 'bg-slate-900 border-slate-700 text-slate-300'
               }`}
             >
-              Mode Kontroler ASUS ROG Ally: {settings.rogAllyMode ? 'Aktif (Tampilkan Tombol A/B/X/Y)' : 'Nonaktif'}
+              Mode Controller: {settings.rogAllyMode ? 'Aktif (Tampilkan Tombol A/B/X/Y)' : 'Nonaktif'}
             </button>
           </div>
 

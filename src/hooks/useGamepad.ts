@@ -27,7 +27,7 @@ interface UseGamepadOptions {
 }
 
 /**
- * Full ASUS ROG Ally / Xbox Standard Gamepad API + Keyboard Bridge
+ * Full Controller / Standard Gamepad API + Keyboard Bridge
  * Polls navigator.getGamepads() at 60fps for zero-latency movement and discrete UI actions.
  */
 export function useGamepad(options: UseGamepadOptions = {}) {
@@ -124,7 +124,7 @@ export function useGamepad(options: UseGamepadOptions = {}) {
       setStatus((prev) => ({
         ...prev,
         connected: true,
-        controllerName: e.gamepad.id || 'ROG Ally Controller',
+        controllerName: e.gamepad.id || 'Controller',
       }));
     };
     const onDisconnect = () => {

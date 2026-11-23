@@ -412,7 +412,7 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({
           <div className="flex items-center gap-2 text-slate-200 bg-slate-950/70 px-2.5 py-1 rounded-lg border border-amber-400/35">
             <Gamepad2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
             <span className="truncate max-w-[260px] sm:max-w-none">
-              ROG Ally &amp; Touch: {gamepadConnected ? 'Kontroler Terhubung' : 'Siap Pakai'} · Offline Ready
+              Controller &amp; Touch: {gamepadConnected ? 'Controller Terhubung' : 'Siap Pakai'} · Offline Ready
             </span>
           </div>
         </footer>

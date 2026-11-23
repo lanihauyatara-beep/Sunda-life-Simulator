@@ -1229,7 +1229,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         />
       )}
 
-      {/* Bottom-left Virtual Analog Joystick (Touch / Mouse drag fallback alongside ROG Ally stick) */}
+      {/* Bottom-left Virtual Analog Joystick (Touch / Mouse drag fallback alongside Controller stick) */}
       {!isPaused && (
         <div
           onClick={(e) => e.stopPropagation()}

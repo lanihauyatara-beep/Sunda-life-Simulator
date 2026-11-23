@@ -19,13 +19,15 @@ export default defineConfig(() => {
           'pwa-512x512.png',
           'pwa-maskable-512x512.png',
           'audio/adzan.mp3',
+          'audio/crickets.mp3',
+          'audio/rooster.mp3',
         ],
         manifest: {
           id: '/',
           name: 'Sunda Life Simulator',
           short_name: 'Sunda Life',
           description:
-            'Simulasi kehidupan kampung Sunda bersama Arga: kelola Warung Arga, ngopi di Warung Asih, berinteraksi dengan warga, dan mainkan offline di HP, Tablet, Laptop, PC & ROG Ally.',
+            'Simulasi kehidupan kampung Sunda bersama Arga: kelola Warung Arga, ngopi di Warung Asih, berinteraksi dengan warga, dan mainkan offline di HP, Tablet, Laptop, PC & Controller.',
           theme_color: '#020617',
           background_color: '#020617',
           display: 'standalone',
