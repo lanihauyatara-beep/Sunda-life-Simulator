@@ -22,6 +22,8 @@ import {
   Maximize2,
   Minimize2,
   Shirt,
+  KeyRound,
+  Lock,
 } from 'lucide-react';
 import {
   GAME_VERSION,
@@ -1339,6 +1341,97 @@ export const ChangelogAndGuideModal: React.FC<{ onClose: () => void }> = ({ onCl
           Oke, Ayo Main! [A / B]
         </button>
       </div>
+    </div>
+  );
+};
+
+const VALID_ACCESS_CODE = 'B47URI';
+
+interface AccessCodeModalProps {
+  onUnlock: () => void;
+}
+
+export const AccessCodeModal: React.FC<AccessCodeModalProps> = ({ onUnlock }) => {
+  const [code, setCode] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalized = code.trim().toUpperCase();
+    if (normalized === VALID_ACCESS_CODE) {
+      soundEngine.angklungSuccess();
+      setErrorMsg(null);
+      onUnlock();
+    } else {
+      soundEngine.error();
+      setErrorMsg('Kode akses salah. Pastikan kode akses yang dimasukkan sudah benar.');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[130] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md bg-slate-900 border-2 border-amber-400 rounded-2xl p-5 sm:p-6 shadow-[0_0_55px_rgba(245,158,11,0.35)]"
+      >
+        <div className="text-center mb-4">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-400/15 border border-amber-400/60 flex items-center justify-center text-amber-300 mb-3">
+            <Lock className="w-6 h-6" />
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/45 text-amber-300 text-[11px] font-bold mb-1.5">
+            Akses Pertama · Sunda Life Simulator
+          </div>
+          <h2 className="font-display text-xl sm:text-2xl font-bold text-amber-100">
+            Masukkan Kode Akses
+          </h2>
+          <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+            Untuk mengakses permainan pertama kali, masukkan kode akses Anda. Setelah berhasil, Anda bisa langsung bermain dan tidak perlu memasukkannya lagi.
+          </p>
+        </div>
+
+        <div className="space-y-3 mb-4">
+          <div>
+            <label
+              htmlFor="access-code-input"
+              className="block text-[11px] font-bold uppercase tracking-wider text-amber-300 mb-1.5"
+            >
+              Kode Akses (Otomatis Huruf Kapital)
+            </label>
+            <div className="relative">
+              <KeyRound className="w-4 h-4 text-amber-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                id="access-code-input"
+                type="text"
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={12}
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value.toUpperCase().replace(/\s+/g, ''));
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                placeholder="KETIK KODE AKSES..."
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950 border-2 border-amber-400/60 focus:border-amber-300 focus:outline-none text-amber-100 font-mono-num text-base sm:text-lg font-extrabold tracking-[0.25em] uppercase placeholder:tracking-normal placeholder:font-sans placeholder:text-xs placeholder:font-normal placeholder:text-slate-500"
+              />
+            </div>
+          </div>
+
+          {errorMsg && (
+            <div className="px-3 py-2 rounded-lg bg-rose-950/75 border border-rose-400/60 text-rose-200 text-xs font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="submit"
+          className="w-full py-3 rounded-xl bg-gradient-to-b from-amber-300 to-amber-400 hover:brightness-105 text-slate-950 font-display font-extrabold text-base shadow-[0_4px_0_#92400e] active:translate-y-0.5 transition-all"
+        >
+          Verifikasi &amp; Masuk Game
+        </button>
+      </form>
     </div>
   );
 };

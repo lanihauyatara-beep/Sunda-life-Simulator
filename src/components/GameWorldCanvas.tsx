@@ -801,6 +801,17 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
     rainVisible && isOutdoorRain ? (weather === 'hujan' ? 0.95 : 0.65) : 0;
   const heavyRainLayerOpacity =
     rainVisible && !scene.isIndoor && weather === 'hujan' ? 1 : 0;
+  const fogOverlayOpacity = scene.isIndoor
+    ? 0
+    : weather === 'gerimis'
+    ? isNightTime
+      ? 0.68
+      : 0.9
+    : weather === 'mendung'
+    ? isNightTime
+      ? 0.56
+      : 0.78
+    : 0;
   const drizzleSplitIdx = batterySaver ? 8 : 16;
   const totalDropsCap = batterySaver ? 16 : 34;
 
@@ -929,6 +940,43 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
           }}
           className="absolute inset-0"
         />
+      </div>
+
+      {/* Efek Kabut Kampung Sunda: muncul perlahan saat cuaca berganti menjadi 'mendung' atau 'gerimis' */}
+      <div
+        aria-hidden="true"
+        style={{ opacity: fogOverlayOpacity }}
+        className="absolute inset-0 z-[15] pointer-events-none overflow-hidden transition-opacity duration-[2600ms] ease-in-out"
+      >
+        {/* Soft horizon & valley mist blanket */}
+        <div
+          style={{
+            background: isNightTime
+              ? 'linear-gradient(180deg, rgba(148,163,184,0.12) 0%, rgba(100,116,139,0.16) 46%, rgba(148,163,184,0.28) 100%)'
+              : 'linear-gradient(180deg, rgba(226,232,240,0.14) 0%, rgba(226,232,240,0.22) 48%, rgba(241,245,249,0.34) 100%)',
+          }}
+          className="absolute inset-0"
+        />
+        {!batterySaver && (
+          <>
+            {/* Upper drifting Priangan highland mist bank */}
+            <div
+              style={{
+                background:
+                  'radial-gradient(ellipse 68% 40% at 22% 34%, rgba(241,245,249,0.28) 0%, rgba(226,232,240,0.12) 48%, transparent 74%), radial-gradient(ellipse 62% 36% at 78% 26%, rgba(226,232,240,0.24) 0%, rgba(203,213,225,0.1) 46%, transparent 72%)',
+              }}
+              className="absolute -inset-10 sunda-fog-drift-a"
+            />
+            {/* Lower drifting village & sawah fog wisps */}
+            <div
+              style={{
+                background:
+                  'radial-gradient(ellipse 75% 38% at 32% 76%, rgba(248,250,252,0.3) 0%, rgba(226,232,240,0.14) 50%, transparent 76%), radial-gradient(ellipse 70% 34% at 74% 84%, rgba(241,245,249,0.28) 0%, rgba(203,213,225,0.12) 48%, transparent 74%)',
+              }}
+              className="absolute -inset-10 sunda-fog-drift-b"
+            />
+          </>
+        )}
       </div>
 
       {/* Brief Soft Atmospheric Transition Veil when weather shifts */}

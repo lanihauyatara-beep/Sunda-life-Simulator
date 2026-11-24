@@ -77,6 +77,7 @@ import { FishingModal, FruitPickingModal, SideJobModal } from './components/Mini
 import { PasarShopModal, TransportPasarModal } from './components/PasarAndTransportModal';
 import {
   AccidentModal,
+  AccessCodeModal,
   ChangelogAndGuideModal,
   DialogueModal,
   DisplayModeModal,
@@ -90,6 +91,7 @@ import { LandscapeOrientationGuard, OfflineNoticePill } from './components/PWAAn
 const SLOT_STORAGE_PREFIX = 'sunda_life_sim_slot_';
 const ACTIVE_SLOT_STORAGE_KEY = 'sunda_life_sim_active_slot';
 const SETTINGS_STORAGE_KEY = 'sunda_life_sim_settings';
+const ACCESS_CODE_STORAGE_KEY = 'sunda_life_sim_access_granted';
 
 function loadSettings(): GameSettings {
   try {
@@ -286,6 +288,13 @@ function advanceClockState(
 }
 
 export default function App() {
+  const [hasAccess, setHasAccess] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ACCESS_CODE_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [screen, setScreen] = useState<GameScreen>('COVER');
   const [settings, setSettings] = useState<GameSettings>(() => loadSettings());
   const [slots, setSlots] = useState<SaveSlotSummary[]>(() => readAllSaveSlots());
@@ -1372,6 +1381,7 @@ export default function App() {
   // Controller & Keyboard Event Handler
   const handleGamepadButton = useCallback(
     (btn: GamepadActionEvent extends never ? never : keyof GamepadActionEvent) => {
+      if (!hasAccess) return;
       if (screen === 'COVER') {
         if (activeModal === 'LOAD_SAVE') {
           if (btn === 'DPAD_DOWN' || btn === 'DPAD_RIGHT') {
@@ -1504,11 +1514,11 @@ export default function App() {
         setActiveModal('SETTINGS');
       }
     },
-    [screen, activeModal, coverFocusIdx, slotFocusIdx, gameState.scene, handleStartOrContinue, handleSelectSlot, handleChangeScene]
+    [hasAccess, screen, activeModal, coverFocusIdx, slotFocusIdx, gameState.scene, handleStartOrContinue, handleSelectSlot, handleChangeScene]
   );
 
   const { status: gamepadStatus, moveVecRef } = useGamepad({
-    enabled: true,
+    enabled: hasAccess,
     onButtonPress: handleGamepadButton,
   });
 
@@ -1588,6 +1598,18 @@ export default function App() {
               soundEngine.click();
               setPendingLaunch(null);
               setActiveModal(null);
+            }}
+          />
+        )}
+        {!hasAccess && (
+          <AccessCodeModal
+            onUnlock={() => {
+              try {
+                localStorage.setItem(ACCESS_CODE_STORAGE_KEY, 'true');
+              } catch {
+                // ignore storage quota
+              }
+              setHasAccess(true);
             }}
           />
         )}
