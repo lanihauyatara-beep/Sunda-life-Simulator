@@ -42,6 +42,9 @@ class SoundEngine {
   private pasarTickerId: number | null = null;
 
   private ambientTickerId: number | null = null;
+  private indoorRainTimerId: number | null = null;
+  private thunderTimerId: number | null = null;
+  private lastThunderAt = 0;
   private lastEnvState: EnvironmentAudioState | null = null;
   private isAudioUnlocked = false;
   private adzanAudio: HTMLAudioElement | null = null;
@@ -73,7 +76,7 @@ class SoundEngine {
     this.ensureContext();
     this.isAudioUnlocked = true;
     if (this.lastEnvState) {
-      this.updateCricketsLayer(this.lastEnvState);
+      this.updateEnvironment(this.lastEnvState);
     }
   }
 
@@ -378,6 +381,12 @@ class SoundEngine {
     if (!this.ctx || !this.ambientMasterGain) return;
     const target = this.lastEnvState?.active ? this.ambientVolume : 0;
     this.ambientMasterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.12);
+    if (this.ambientVolume <= 0.01) {
+      this.stopIndoorRainScheduler();
+      this.stopThunderScheduler();
+    } else if (this.lastEnvState?.active && this.isAudioUnlocked) {
+      this.syncDynamicWeatherSchedulers(this.lastEnvState);
+    }
   }
 
   public updateEnvironment(state: EnvironmentAudioState) {
@@ -421,6 +430,8 @@ class SoundEngine {
       this.pasarChatterGain?.gain.setTargetAtTime(0, now, 0.25);
       this.pasarLfoGain?.gain.setTargetAtTime(0, now, 0.25);
       this.stopAmbientTicker();
+      this.stopIndoorRainScheduler();
+      this.stopThunderScheduler();
       this.stopPasarTicker();
       return;
     }
@@ -431,11 +442,11 @@ class SoundEngine {
     let rainTargetGain = 0;
     let rainTargetFreq = 1800;
     if (state.weather === 'hujan') {
-      rainTargetGain = state.isIndoor ? 0.065 : 0.22;
-      rainTargetFreq = state.isIndoor ? 780 : 3500;
+      rainTargetGain = state.isIndoor ? 0.088 : 0.22;
+      rainTargetFreq = state.isIndoor ? 980 : 3500;
     } else if (state.weather === 'gerimis') {
-      rainTargetGain = state.isIndoor ? 0.024 : 0.085;
-      rainTargetFreq = state.isIndoor ? 650 : 2300;
+      rainTargetGain = state.isIndoor ? 0.042 : 0.085;
+      rainTargetFreq = state.isIndoor ? 820 : 2300;
     }
     this.rainGain?.gain.setTargetAtTime(rainTargetGain, now, 0.58);
     this.rainFilter?.frequency.setTargetAtTime(rainTargetFreq, now, 0.58);
@@ -467,6 +478,11 @@ class SoundEngine {
       sceneTargetGain = 0.016;
       sceneTargetFreq = 360;
       sceneTargetQ = 1.2;
+    } else {
+      // Cozy indoor room tone
+      sceneTargetGain = 0.005;
+      sceneTargetFreq = 260;
+      sceneTargetQ = 0.9;
     }
 
     this.sceneGain?.gain.setTargetAtTime(sceneTargetGain, now, 0.45);
@@ -474,6 +490,305 @@ class SoundEngine {
     this.sceneFilter?.Q.setTargetAtTime(sceneTargetQ, now, 0.45);
 
     this.ensureAmbientTicker();
+    this.syncDynamicWeatherSchedulers(state, prev?.weather !== state.weather);
+  }
+
+  private playIndoorRaindrop(weather: WeatherCondition, sceneId: SceneId) {
+    if (!this.isAudioUnlocked || this.ambientVolume <= 0.01) return;
+    if (!this.ensureAmbientGraph() || !this.ctx || !this.ambientMasterGain) return;
+
+    const ctx = this.ctx;
+    const isWarung = sceneId === 'warung_interior' || sceneId === 'warung_asih';
+    const count = weather === 'hujan' ? (Math.random() < 0.45 ? 3 : 2) : Math.random() < 0.35 ? 2 : 1;
+
+    for (let i = 0; i < count; i++) {
+      const delay = i * (0.045 + Math.random() * 0.095);
+      const t0 = ctx.currentTime + delay;
+
+      // 1. Crisp roof-tile / window-pane raindrop micro-patter
+      const dropDur = 0.032 + Math.random() * 0.034;
+      const src = ctx.createBufferSource();
+      src.buffer = this.getNoiseBuffer(ctx);
+      src.loop = true;
+
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      const baseFreq = isWarung ? 1750 + Math.random() * 1450 : 1350 + Math.random() * 1250;
+      bp.frequency.setValueAtTime(baseFreq, t0);
+      bp.Q.setValueAtTime(2.4 + Math.random() * 1.4, t0);
+
+      const nGain = ctx.createGain();
+      const baseVol = weather === 'hujan' ? 0.034 : 0.022;
+      const peak = baseVol * (0.7 + Math.random() * 0.65);
+      nGain.gain.setValueAtTime(0.0001, t0);
+      nGain.gain.exponentialRampToValueAtTime(peak, t0 + 0.006);
+      nGain.gain.exponentialRampToValueAtTime(0.0001, t0 + dropDur);
+
+      src.connect(bp);
+      bp.connect(nGain);
+      nGain.connect(this.ambientMasterGain);
+      src.start(t0, Math.random() * 2.2);
+      src.stop(t0 + dropDur + 0.02);
+
+      // 2. Subtle hollow genteng / wooden eave resonance ping on select drops
+      if (Math.random() < (weather === 'hujan' ? 0.65 : 0.8)) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        const pitch = (isWarung ? 640 : 510) + Math.random() * 620;
+        osc.frequency.setValueAtTime(pitch, t0);
+        osc.frequency.exponentialRampToValueAtTime(pitch * 0.72, t0 + 0.045);
+
+        const pGain = ctx.createGain();
+        const pPeak = (weather === 'hujan' ? 0.015 : 0.012) * (0.7 + Math.random() * 0.6);
+        pGain.gain.setValueAtTime(0.0001, t0);
+        pGain.gain.exponentialRampToValueAtTime(pPeak, t0 + 0.004);
+        pGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.048);
+
+        osc.connect(pGain);
+        pGain.connect(this.ambientMasterGain);
+        osc.start(t0);
+        osc.stop(t0 + 0.06);
+      }
+    }
+  }
+
+  private scheduleNextIndoorRaindrop() {
+    if (typeof window === 'undefined') return;
+    const env = this.lastEnvState;
+    if (
+      !env ||
+      !env.active ||
+      !env.isIndoor ||
+      (env.weather !== 'gerimis' && env.weather !== 'hujan') ||
+      this.ambientVolume <= 0.01
+    ) {
+      this.indoorRainTimerId = null;
+      return;
+    }
+
+    const delayMs =
+      env.weather === 'hujan'
+        ? 95 + Math.random() * 210
+        : 240 + Math.random() * 480;
+
+    this.indoorRainTimerId = window.setTimeout(() => {
+      this.indoorRainTimerId = null;
+      const latest = this.lastEnvState;
+      if (
+        !latest ||
+        !latest.active ||
+        !latest.isIndoor ||
+        (latest.weather !== 'gerimis' && latest.weather !== 'hujan')
+      ) {
+        return;
+      }
+      if (this.isAudioUnlocked && this.ambientVolume > 0.01) {
+        this.playIndoorRaindrop(latest.weather, latest.sceneId);
+      }
+      this.scheduleNextIndoorRaindrop();
+    }, delayMs);
+  }
+
+  private stopIndoorRainScheduler() {
+    if (this.indoorRainTimerId !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.indoorRainTimerId);
+      this.indoorRainTimerId = null;
+    }
+  }
+
+  /**
+   * Dynamic randomized-duration thunder strike (supports outdoor intensity & realistic indoor roof muffling)
+   */
+  public playThunder(isIndoor = false, weather: WeatherCondition = 'hujan') {
+    if (this.ambientVolume <= 0.01 || !this.isAudioUnlocked) return;
+    if (!this.ensureAmbientGraph() || !this.ctx || !this.ambientMasterGain) return;
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    this.lastThunderAt = Date.now();
+
+    // Random duration (2.4s .. 7.0s for hujan, slightly shorter for gerimis/mendung)
+    const totalDuration =
+      weather === 'hujan'
+        ? 2.6 + Math.random() * 4.4
+        : weather === 'gerimis'
+        ? 2.2 + Math.random() * 3.4
+        : 2.0 + Math.random() * 2.8;
+
+    const baseIntensity =
+      weather === 'hujan'
+        ? 0.55 + Math.random() * 0.45
+        : weather === 'gerimis'
+        ? 0.34 + Math.random() * 0.34
+        : 0.24 + Math.random() * 0.26;
+
+    const indoorScale = isIndoor ? 0.64 : 1.0;
+    const cutoffScale = isIndoor ? 0.68 : 1.0;
+    const masterOut = this.ambientMasterGain;
+
+    // Layer 1: Optional sharp cloud crack on stronger strikes
+    if (baseIntensity > 0.56) {
+      const crackDur = 0.26 + Math.random() * 0.26;
+      const cSrc = ctx.createBufferSource();
+      cSrc.buffer = this.getNoiseBuffer(ctx);
+      cSrc.loop = true;
+
+      const cFilter = ctx.createBiquadFilter();
+      cFilter.type = 'bandpass';
+      cFilter.frequency.setValueAtTime((isIndoor ? 460 : 980) + Math.random() * 350, now);
+      cFilter.frequency.exponentialRampToValueAtTime(110, now + crackDur);
+      cFilter.Q.setValueAtTime(0.95, now);
+
+      const cGain = ctx.createGain();
+      const cPeak = (isIndoor ? 0.045 : 0.11) * baseIntensity;
+      cGain.gain.setValueAtTime(0.0001, now);
+      cGain.gain.exponentialRampToValueAtTime(cPeak, now + 0.035);
+      cGain.gain.exponentialRampToValueAtTime(0.0001, now + crackDur);
+
+      cSrc.connect(cFilter);
+      cFilter.connect(cGain);
+      cGain.connect(masterOut);
+      cSrc.start(now, Math.random() * 1.5);
+      cSrc.stop(now + crackDur + 0.03);
+    }
+
+    // Layer 2: Primary rolling thunder boom + 1-2 mountain valley echoes across totalDuration
+    const rollCount = totalDuration > 4.6 ? 3 : 2;
+    for (let r = 0; r < rollCount; r++) {
+      const offsetRatio = r === 0 ? 0.04 : r === 1 ? 0.3 + Math.random() * 0.16 : 0.54 + Math.random() * 0.14;
+      const tStart = now + totalDuration * offsetRatio;
+      const rollDur = Math.max(1.1, totalDuration * (1 - offsetRatio));
+      const rollDecay = r === 0 ? 1 : r === 1 ? 0.68 : 0.44;
+
+      const rSrc = ctx.createBufferSource();
+      rSrc.buffer = this.getNoiseBuffer(ctx);
+      rSrc.loop = true;
+
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      const startCutoff = (210 + Math.random() * 90 - r * 35) * cutoffScale;
+      const endCutoff = Math.max(32, (48 + Math.random() * 18) * cutoffScale);
+      lp.frequency.setValueAtTime(startCutoff, tStart);
+      lp.frequency.exponentialRampToValueAtTime(endCutoff, tStart + rollDur);
+      lp.Q.setValueAtTime(0.85, tStart);
+
+      const rGain = ctx.createGain();
+      const peak = 0.27 * baseIntensity * indoorScale * rollDecay;
+      const attack = Math.min(0.45, rollDur * 0.2);
+      rGain.gain.setValueAtTime(0.0001, tStart);
+      rGain.gain.exponentialRampToValueAtTime(Math.max(0.001, peak), tStart + attack);
+      rGain.gain.exponentialRampToValueAtTime(0.0001, tStart + rollDur);
+
+      rSrc.connect(lp);
+      lp.connect(rGain);
+      rGain.connect(masterOut);
+      rSrc.start(tStart, (Math.random() * 2.1) % 2.8);
+      rSrc.stop(tStart + rollDur + 0.05);
+    }
+
+    // Layer 3: Sub-bass pressure rumble (felt lightly even inside the house/warung)
+    const subDur = Math.min(2.8, totalDuration * 0.56);
+    const subOsc = ctx.createOscillator();
+    subOsc.type = 'triangle';
+    subOsc.frequency.setValueAtTime(48 + Math.random() * 12, now);
+    subOsc.frequency.exponentialRampToValueAtTime(27, now + subDur);
+
+    const subLp = ctx.createBiquadFilter();
+    subLp.type = 'lowpass';
+    subLp.frequency.setValueAtTime(75, now);
+
+    const subGain = ctx.createGain();
+    const subPeak = 0.085 * baseIntensity * indoorScale;
+    subGain.gain.setValueAtTime(0.0001, now);
+    subGain.gain.exponentialRampToValueAtTime(Math.max(0.001, subPeak), now + 0.22);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, now + subDur);
+
+    subOsc.connect(subLp);
+    subLp.connect(subGain);
+    subGain.connect(masterOut);
+    subOsc.start(now);
+    subOsc.stop(now + subDur + 0.04);
+  }
+
+  private scheduleNextThunder(quickInitial = false) {
+    if (typeof window === 'undefined') return;
+    const env = this.lastEnvState;
+    if (
+      !env ||
+      !env.active ||
+      (env.weather !== 'hujan' && env.weather !== 'gerimis' && env.weather !== 'mendung') ||
+      this.ambientVolume <= 0.01
+    ) {
+      this.thunderTimerId = null;
+      return;
+    }
+
+    let delayMs: number;
+    if (quickInitial && env.weather === 'hujan' && Date.now() - this.lastThunderAt > 10000) {
+      delayMs = 2200 + Math.random() * 3200;
+    } else if (env.weather === 'hujan') {
+      delayMs = 8500 + Math.random() * 14500;
+    } else if (env.weather === 'gerimis') {
+      delayMs = 15000 + Math.random() * 23000;
+    } else {
+      delayMs = 23000 + Math.random() * 31000;
+    }
+
+    this.thunderTimerId = window.setTimeout(() => {
+      this.thunderTimerId = null;
+      const latest = this.lastEnvState;
+      if (
+        !latest ||
+        !latest.active ||
+        (latest.weather !== 'hujan' && latest.weather !== 'gerimis' && latest.weather !== 'mendung')
+      ) {
+        return;
+      }
+      if (this.isAudioUnlocked && this.ambientVolume > 0.01) {
+        this.playThunder(latest.isIndoor, latest.weather);
+      }
+      this.scheduleNextThunder(false);
+    }, delayMs);
+  }
+
+  private stopThunderScheduler() {
+    if (this.thunderTimerId !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.thunderTimerId);
+      this.thunderTimerId = null;
+    }
+  }
+
+  private syncDynamicWeatherSchedulers(state: EnvironmentAudioState, weatherChanged = false) {
+    if (!state.active || this.ambientVolume <= 0.01) {
+      this.stopIndoorRainScheduler();
+      this.stopThunderScheduler();
+      return;
+    }
+
+    // Indoor raindrop patter scheduler (active indoors during gerimis or hujan)
+    const shouldPlayIndoorDrops =
+      state.isIndoor && (state.weather === 'gerimis' || state.weather === 'hujan');
+    if (shouldPlayIndoorDrops) {
+      if (this.indoorRainTimerId === null) {
+        this.scheduleNextIndoorRaindrop();
+      }
+    } else {
+      this.stopIndoorRainScheduler();
+    }
+
+    // Occasional randomized thunder scheduler (active in hujan, gerimis, or mendung — both outdoor & indoor)
+    const canThunder =
+      state.weather === 'hujan' || state.weather === 'gerimis' || state.weather === 'mendung';
+    if (canThunder) {
+      if (weatherChanged && state.weather === 'hujan') {
+        this.stopThunderScheduler();
+        this.scheduleNextThunder(true);
+      } else if (this.thunderTimerId === null) {
+        this.scheduleNextThunder(state.weather === 'hujan');
+      }
+    } else {
+      this.stopThunderScheduler();
+    }
   }
 
   private ensureAmbientTicker() {
