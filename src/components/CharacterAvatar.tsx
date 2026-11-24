@@ -12,10 +12,14 @@ interface CharacterSpriteProps {
   isArga?: boolean;
   isInjured?: boolean;
   facing?: 'left' | 'right';
+  viewPerspective?: 'front' | 'back' | 'back_left' | 'back_right';
+  sunShadowOffset?: { dx: number; dy: number; opacity: number };
   moveDir?: NpcDirection;
   motionState?: NpcMotionState;
   walkCadenceSec?: number;
   isMoving?: boolean;
+  gesture?: 'none' | 'wave' | 'salute' | 'nod';
+  hideNameplate?: boolean;
 }
 
 export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
@@ -27,14 +31,19 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
   isArga = false,
   isInjured = false,
   facing = 'right',
+  viewPerspective = 'front',
+  sunShadowOffset,
   moveDir,
   motionState,
   walkCadenceSec = 0.52,
   isMoving = false,
+  gesture = 'none',
+  hideNameplate = false,
 }) => {
   const uid = React.useId().replace(/:/g, '');
   const skinGradId = `skin_${uid}`;
   const shirtGradId = `shirt_${uid}`;
+  const shadowGradId = `shadow_${uid}`;
   const isSarungOutfit = outfitMode === 'sarung';
   const isWarmOutfit = outfitMode === 'warm';
   const effectiveShirtColor = isSarungOutfit ? '#f8fafc' : isWarmOutfit ? '#1e3a8a' : shirtColor;
@@ -48,24 +57,50 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
     ? 'sunda-walk-vertical'
     : 'sunda-walk-bob';
 
+  const isRearView = viewPerspective !== 'front';
+  const isAngledRear = viewPerspective === 'back_left' || viewPerspective === 'back_right';
+  const shouldMirrorSvg = isRearView ? viewPerspective === 'back_left' : facing === 'left';
+  const shadowDx = (sunShadowOffset?.dx ?? 3) * (shouldMirrorSvg ? -1 : 1);
+  const shadowDy = sunShadowOffset?.dy ?? 2;
+  const shadowOpacity = sunShadowOffset?.opacity ?? 0.34;
+
+  const leftArmClass = isMoving
+    ? 'sunda-walk-arm-l'
+    : gesture === 'salute'
+    ? 'sunda-greet-salute-l'
+    : '';
+  const rightArmClass = isMoving
+    ? 'sunda-walk-arm-r'
+    : gesture === 'wave'
+    ? 'sunda-greet-arm-wave'
+    : gesture === 'salute'
+    ? 'sunda-greet-salute-r'
+    : '';
+  const headGestureClass =
+    !isMoving && (gesture === 'nod' || gesture === 'salute' || gesture === 'wave')
+      ? 'sunda-greet-nod'
+      : '';
+
   return (
     <div className="flex flex-col items-center pointer-events-none select-none">
       {/* Overhead name plate */}
-      <div
-        className={`mb-0.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-tight whitespace-nowrap shadow-md ${
-          isArga
-            ? 'bg-amber-400 text-slate-950 border border-amber-200'
-            : 'bg-slate-950/90 text-amber-100 border border-amber-400/50'
-        }`}
-      >
-        {name}
-      </div>
+      {!hideNameplate && name && (
+        <div
+          className={`mb-0.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-tight whitespace-nowrap shadow-md ${
+            isArga
+              ? 'bg-amber-400 text-slate-950 border border-amber-200'
+              : 'bg-slate-950/90 text-amber-100 border border-amber-400/50'
+          }`}
+        >
+          {name}
+        </div>
+      )}
 
       <svg
         viewBox="0 0 64 96"
         style={{ '--walk-cadence': `${walkCadenceSec}s` } as React.CSSProperties}
-        className={`w-13 h-20 drop-shadow-[0_7px_6px_rgba(0,0,0,0.55)] transition-transform duration-150 ${
-          facing === 'left' ? 'scale-x-[-1]' : ''
+        className={`w-13 h-20 drop-shadow-[0_6px_7px_rgba(2,6,23,0.42)] transition-transform duration-150 ${
+          shouldMirrorSvg ? 'scale-x-[-1]' : ''
         } ${isTransitionWalk ? 'brightness-105' : ''}`}
       >
         <defs>
@@ -78,15 +113,28 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
             <stop offset="0%" stopColor={effectiveShirtColor} />
             <stop offset="100%" stopColor="#0f172a" stopOpacity={isSarungOutfit ? '0.12' : '0.28'} />
           </linearGradient>
+          <radialGradient id={shadowGradId} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#020617" stopOpacity="0.62" />
+            <stop offset="55%" stopColor="#020617" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#020617" stopOpacity="0" />
+          </radialGradient>
         </defs>
 
-        {/* Ground contact shadow */}
+        {/* Soft multi-layered directional sun shadow + ambient contact occlusion shadow */}
+        <ellipse
+          cx={32 + shadowDx}
+          cy={89 + shadowDy}
+          rx="18"
+          ry="5.2"
+          fill={`url(#${shadowGradId})`}
+          opacity={shadowOpacity}
+        />
         <ellipse
           cx="32"
           cy="89"
-          rx="15"
-          ry="4.5"
-          fill="rgba(0,0,0,0.45)"
+          rx="14.5"
+          ry="4.2"
+          fill={`url(#${shadowGradId})`}
           className={isMoving ? 'sunda-walk-shadow' : ''}
         />
 
@@ -102,7 +150,7 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
                 stroke="#0f172a"
                 strokeWidth="1.2"
               />
-              <line x1="24" y1="60" x2="23.5" y2="80" stroke="rgba(255,255,255,0.16)" strokeWidth="1.5" />
+              <line x1="24" y1="60" x2="23.5" y2="80" stroke="rgba(255,255,255,0.14)" strokeWidth="1.5" />
             </>
           )}
           <ellipse cx="24.5" cy="86" rx="5.5" ry="2.8" fill="#5c2d16" stroke="#1c0d06" strokeWidth="1" />
@@ -121,7 +169,7 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
                 stroke="#0f172a"
                 strokeWidth="1.2"
               />
-              <line x1="39" y1="60" x2="39.5" y2="80" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
+              <line x1="39" y1="60" x2="39.5" y2="80" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5" />
             </>
           )}
           {isInjured && (
@@ -137,24 +185,24 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
         {/* Kain Sarung (Master+ Prayer Outfit) wrapped gracefully over lower body */}
         {isSarungOutfit && (
           <g>
-            {/* Main woven emerald-teal sarung */}
             <path
               d="M19 56 Q32 54 45 56 L47 80 Q32 82.5 17 80 Z"
               fill="#0f766e"
               stroke="#042f2e"
               strokeWidth="1.2"
             />
-            {/* Horizontal woven stripes */}
             <path d="M18.5 62 Q32 60.5 45.5 62" stroke="#14b8a6" strokeWidth="1.5" fill="none" opacity="0.65" />
             <path d="M18 68 Q32 66.5 46 68" stroke="#f59e0b" strokeWidth="1.3" fill="none" opacity="0.7" />
             <path d="M17.5 74 Q32 72.5 46.5 74" stroke="#134e4a" strokeWidth="1.8" fill="none" opacity="0.85" />
             <path d="M17.2 78.2 Q32 80 46.8 78.2" stroke="#fde68a" strokeWidth="1.1" fill="none" opacity="0.75" />
-            {/* Vertical woven plaid bands & central sarung lipatan fold */}
             <line x1="25" y1="56" x2="24" y2="80.5" stroke="#134e4a" strokeWidth="1.5" opacity="0.65" />
             <line x1="39" y1="56" x2="40" y2="80.5" stroke="#134e4a" strokeWidth="1.5" opacity="0.65" />
-            <path d="M31.5 55.5 L32 81" stroke="#042f2e" strokeWidth="1.6" opacity="0.85" />
-            <path d="M32.8 55.8 L33.2 81" stroke="#fde68a" strokeWidth="0.9" opacity="0.6" />
-            {/* Waistband fold (gulungan sarung) */}
+            {!isRearView && (
+              <>
+                <path d="M31.5 55.5 L32 81" stroke="#042f2e" strokeWidth="1.6" opacity="0.85" />
+                <path d="M32.8 55.8 L33.2 81" stroke="#fde68a" strokeWidth="0.9" opacity="0.6" />
+              </>
+            )}
             <path
               d="M19 54 Q32 52 45 54 L45.5 58 Q32 56.5 18.5 58 Z"
               fill="#115e59"
@@ -166,8 +214,8 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
 
         {/* Upper body stride bob / vertical walk / idle breathing */}
         <g className={bodyMotionClass}>
-          {/* Back Arm */}
-          <g className={isMoving ? 'sunda-walk-arm-l' : ''}>
+          {/* Left / Back Arm */}
+          <g className={leftArmClass}>
             <path
               d="M17 33 Q12 41 13 53 Q15 56 18 54 L20 39 Z"
               fill={`url(#${skinGradId})`}
@@ -198,54 +246,92 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
             fill={`url(#${shirtGradId})`}
           />
 
-          {isWarmOutfit ? (
-            <g>
-              {/* Quilted warm jacket seams & front amber zipper */}
-              <path d="M18.5 39 Q32 40.5 45.5 39" stroke="#0f172a" strokeWidth="0.9" fill="none" opacity="0.55" />
-              <path d="M19 47 Q32 48.5 45 47" stroke="#0f172a" strokeWidth="0.9" fill="none" opacity="0.55" />
-              <line x1="32" y1="33" x2="32" y2="58" stroke="#f59e0b" strokeWidth="2" />
-              {/* Warm jacket pockets */}
-              <rect x="21" y="49" width="6.5" height="5" rx="1.2" fill="#172554" stroke="#60a5fa" strokeWidth="0.7" opacity="0.8" />
-              <rect x="36.5" y="49" width="6.5" height="5" rx="1.2" fill="#172554" stroke="#60a5fa" strokeWidth="0.7" opacity="0.8" />
-              {/* Cozy knit scarf around neck with hanging tail */}
-              <path
-                d="M23 28 Q32 34 41 28 L42 34 Q32 38.5 22 34 Z"
-                fill="#f59e0b"
-                stroke="#78350f"
-                strokeWidth="1"
-              />
-              <path
-                d="M34 33 L38 45 L33.5 46 L31 35 Z"
-                fill="#d97706"
-                stroke="#78350f"
-                strokeWidth="0.9"
-              />
-              <line x1="25" y1="31" x2="39" y2="31" stroke="#fef3c7" strokeWidth="1" opacity="0.7" />
-            </g>
-          ) : isSarungOutfit ? (
-            <g>
-              {/* Baju Koko standing collar & subtle teal/gold embroidery */}
-              <path d="M26 28 Q32 32 38 28 L37 32 Q32 35 27 32 Z" fill="#0f766e" stroke="#042f2e" strokeWidth="0.9" />
-              <line x1="32" y1="33" x2="32" y2="55" stroke="#0f766e" strokeWidth="1.6" opacity="0.75" />
-              <circle cx="32" cy="37" r="0.9" fill="#f59e0b" />
-              <circle cx="32" cy="42" r="0.9" fill="#f59e0b" />
-              <circle cx="32" cy="47" r="0.9" fill="#f59e0b" />
-            </g>
+          {isRearView ? (
+            <>
+              {/* REAR THIRD-PERSON TORSO DETAILS */}
+              {isWarmOutfit ? (
+                <g>
+                  {/* Quilted rear jacket horizontal seams & shoulder yoke */}
+                  <path d="M19.5 36 Q32 37.5 44.5 36" stroke="#0f172a" strokeWidth="1" fill="none" opacity="0.6" />
+                  <path d="M18.5 44 Q32 45.5 45.5 44" stroke="#0f172a" strokeWidth="1" fill="none" opacity="0.6" />
+                  <path d="M19.5 52 Q32 53.5 44.5 52" stroke="#0f172a" strokeWidth="1" fill="none" opacity="0.55" />
+                  {/* Cozy knit scarf wrapped behind neck with flowing rear tails */}
+                  <path d="M23 28 Q32 33 41 28 L42 33.5 Q32 37 22 33.5 Z" fill="#f59e0b" stroke="#78350f" strokeWidth="1" />
+                  <path d="M29 33 L26.5 44 L31 45 L33.5 34 Z" fill="#d97706" stroke="#78350f" strokeWidth="0.9" />
+                  <line x1="25" y1="30.8" x2="39" y2="30.8" stroke="#fef3c7" strokeWidth="1" opacity="0.65" />
+                </g>
+              ) : isSarungOutfit ? (
+                <g>
+                  {/* Rear Baju Koko yoke & neat vertical pleat */}
+                  <path d="M25 28 Q32 30.5 39 28 L38.5 32 Q32 34 25.5 32 Z" fill="#0f766e" stroke="#042f2e" strokeWidth="0.9" />
+                  <path d="M20 36 Q32 37.5 44 36" stroke="#cbd5e1" strokeWidth="1" fill="none" opacity="0.8" />
+                  <line x1="32" y1="36.5" x2="32" y2="57" stroke="#94a3b8" strokeWidth="1.1" opacity="0.6" />
+                </g>
+              ) : (
+                <g>
+                  {/* Rear casual shirt collar band & shoulder yoke */}
+                  <path d="M25.5 28.5 Q32 31 38.5 28.5 L38 32 Q32 33.5 26 32 Z" fill={effectiveAccentColor} stroke="#1e293b" strokeWidth="0.85" />
+                  <path d="M19.5 36.5 Q32 38 44.5 36.5" stroke="rgba(15,23,42,0.32)" strokeWidth="1.1" fill="none" />
+                  <line x1="32" y1="37" x2="32" y2="57" stroke="rgba(15,23,42,0.22)" strokeWidth="1" />
+                </g>
+              )}
+
+              {/* Arga's Signature Sling Bag Strap & Satchel Pouch across the back */}
+              {isArga && !isSarungOutfit && (
+                <g>
+                  <path d="M41 30 L21 56" stroke="#78350f" strokeWidth="3.2" strokeLinecap="round" opacity="0.95" />
+                  <rect x="17" y="49" width="11.5" height="10" rx="2.4" fill="#92400e" stroke="#451a03" strokeWidth="1.1" />
+                  <path d="M17.5 52 L28 52" stroke="#f59e0b" strokeWidth="1.1" opacity="0.8" />
+                  <rect x="21.5" y="53.2" width="2.5" height="2" rx="0.6" fill="#fde68a" />
+                </g>
+              )}
+            </>
           ) : (
             <>
-              {/* Shirt Collar & Placket */}
-              <path d="M25 29 L32 39 L39 29 L36 28 L32 33 L28 28 Z" fill={effectiveAccentColor} stroke="#1e293b" strokeWidth="0.9" />
-              <line x1="32" y1="39" x2="32" y2="58" stroke="rgba(15,23,42,0.35)" strokeWidth="1.2" />
+              {isWarmOutfit ? (
+                <g>
+                  <path d="M18.5 39 Q32 40.5 45.5 39" stroke="#0f172a" strokeWidth="0.9" fill="none" opacity="0.55" />
+                  <path d="M19 47 Q32 48.5 45 47" stroke="#0f172a" strokeWidth="0.9" fill="none" opacity="0.55" />
+                  <line x1="32" y1="33" x2="32" y2="58" stroke="#f59e0b" strokeWidth="2" />
+                  <rect x="21" y="49" width="6.5" height="5" rx="1.2" fill="#172554" stroke="#60a5fa" strokeWidth="0.7" opacity="0.8" />
+                  <rect x="36.5" y="49" width="6.5" height="5" rx="1.2" fill="#172554" stroke="#60a5fa" strokeWidth="0.7" opacity="0.8" />
+                  <path
+                    d="M23 28 Q32 34 41 28 L42 34 Q32 38.5 22 34 Z"
+                    fill="#f59e0b"
+                    stroke="#78350f"
+                    strokeWidth="1"
+                  />
+                  <path
+                    d="M34 33 L38 45 L33.5 46 L31 35 Z"
+                    fill="#d97706"
+                    stroke="#78350f"
+                    strokeWidth="0.9"
+                  />
+                  <line x1="25" y1="31" x2="39" y2="31" stroke="#fef3c7" strokeWidth="1" opacity="0.7" />
+                </g>
+              ) : isSarungOutfit ? (
+                <g>
+                  <path d="M26 28 Q32 32 38 28 L37 32 Q32 35 27 32 Z" fill="#0f766e" stroke="#042f2e" strokeWidth="0.9" />
+                  <line x1="32" y1="33" x2="32" y2="55" stroke="#0f766e" strokeWidth="1.6" opacity="0.75" />
+                  <circle cx="32" cy="37" r="0.9" fill="#f59e0b" />
+                  <circle cx="32" cy="42" r="0.9" fill="#f59e0b" />
+                  <circle cx="32" cy="47" r="0.9" fill="#f59e0b" />
+                </g>
+              ) : (
+                <>
+                  <path d="M25 29 L32 39 L39 29 L36 28 L32 33 L28 28 Z" fill={effectiveAccentColor} stroke="#1e293b" strokeWidth="0.9" />
+                  <line x1="32" y1="39" x2="32" y2="58" stroke="rgba(15,23,42,0.35)" strokeWidth="1.2" />
+                </>
+              )}
+
+              {isArga && !isSarungOutfit && (
+                <path d="M22 30 L42 57" stroke="#78350f" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+              )}
             </>
           )}
 
-          {/* Arga's Signature Sling Bag Strap (hidden while wearing prayer outfit) */}
-          {isArga && !isSarungOutfit && (
-            <path d="M22 30 L42 57" stroke="#78350f" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
-          )}
-
-          {/* Front Arm */}
-          <g className={isMoving ? 'sunda-walk-arm-r' : ''}>
+          {/* Right / Front Arm */}
+          <g className={rightArmClass}>
             <path
               d="M44 33 Q51 42 50 54 Q48 57 45 55 L43 39 Z"
               fill={`url(#${skinGradId})`}
@@ -264,87 +350,144 @@ export const CharacterSprite: React.FC<CharacterSpriteProps> = ({
             )}
           </g>
 
-          {/* Neck & Chin Shadow */}
+          {/* Neck & Head (wrapped for respectful nod greeting animation) */}
+          <g className={headGestureClass}>
           <rect x="28.5" y="24" width="7" height="7" rx="2" fill="#c98b63" />
 
-        {/* Realistic Shaped Head */}
-        <path
-          d="M22 14 Q22 6 32 6 Q42 6 42 14 Q42 25 32 27 Q22 25 22 14 Z"
-          fill={`url(#${skinGradId})`}
-          stroke="#3b2214"
-          strokeWidth="1.1"
-        />
-        {/* Ears */}
-        <ellipse cx="21.5" cy="17" rx="1.8" ry="2.8" fill="#d99a73" />
-        <ellipse cx="42.5" cy="17" rx="1.8" ry="2.8" fill="#d99a73" />
+          {isRearView ? (
+            /* REAR HEAD & HAIR / HEADGEAR */
+            <g>
+              {/* Side Ears peeking from behind head */}
+              <ellipse cx={isAngledRear ? '22.2' : '21.6'} cy="17.5" rx="1.8" ry="2.7" fill="#d99a73" stroke="#3b2214" strokeWidth="0.6" />
+              <ellipse cx={isAngledRear ? '42.4' : '42.4'} cy="17.5" rx="1.9" ry="2.7" fill="#d99a73" stroke="#3b2214" strokeWidth="0.6" />
 
-        {/* Expressive Eyes, Brows, Nose & Smile */}
-        <path d="M25.5 14 Q27.5 13 29.5 14" stroke="#1e293b" strokeWidth="1.1" fill="none" strokeLinecap="round" />
-        <path d="M34.5 14 Q36.5 13 38.5 14" stroke="#1e293b" strokeWidth="1.1" fill="none" strokeLinecap="round" />
-        <ellipse cx="27.8" cy="16.5" rx="1.6" ry="1.8" fill="#ffffff" />
-        <ellipse cx="36.8" cy="16.5" rx="1.6" ry="1.8" fill="#ffffff" />
-        <circle cx="28.1" cy="16.6" r="1.1" fill="#1e293b" />
-        <circle cx="37.1" cy="16.6" r="1.1" fill="#1e293b" />
-        <path d="M32 17.5 L31.5 20.5 L33 20.8" stroke="#a66844" strokeWidth="0.9" fill="none" strokeLinecap="round" />
-        <path d="M29 22.8 Q32 24.8 35.5 22.6" stroke="#7c2d12" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+              {/* Subtle 3/4 cheek/jaw contour when turning left or right */}
+              <path
+                d="M22 14 Q22 6 32 6 Q42 6 42 14 Q42 25 32 26.5 Q22 25 22 14 Z"
+                fill={`url(#${skinGradId})`}
+                stroke="#3b2214"
+                strokeWidth="1"
+              />
 
-        {/* Hair & Traditional Sundanese Headgear */}
-        {effectiveHatType === 'none' && isWarmOutfit && (
-          <g>
-            {/* Cozy knit beanie / kupluk hangat for Elite rainy season */}
-            <path d="M21 12 Q21.5 3.5 32 3.5 Q42.5 3.5 43 12 Z" fill="#b45309" stroke="#451a03" strokeWidth="1" />
-            <rect x="20.5" y="9.5" width="23" height="3.8" rx="1.8" fill="#f59e0b" stroke="#78350f" strokeWidth="0.9" />
-            <circle cx="32" cy="3.2" r="2.1" fill="#fde68a" stroke="#78350f" strokeWidth="0.7" />
+              {/* Full back of head hair / beanie / peci */}
+              {effectiveHatType === 'none' && isWarmOutfit && (
+                <g>
+                  <path d="M21 15 Q21.5 3.5 32 3.5 Q42.5 3.5 43 15 L42 24.5 Q32 26.5 22 24.5 Z" fill="#1e293b" />
+                  <path d="M21 14 Q21.5 3.5 32 3.5 Q42.5 3.5 43 14 Z" fill="#b45309" stroke="#451a03" strokeWidth="1" />
+                  <rect x="20.5" y="11" width="23" height="4.2" rx="1.8" fill="#f59e0b" stroke="#78350f" strokeWidth="0.9" />
+                  <circle cx="32" cy="3.2" r="2.2" fill="#fde68a" stroke="#78350f" strokeWidth="0.7" />
+                </g>
+              )}
+              {effectiveHatType === 'none' && !isWarmOutfit && (
+                <g>
+                  <path
+                    d="M21.5 14.5 Q21.5 4.8 32 4.8 Q42.5 4.8 42.5 14.5 Q42.2 22 39 24.5 Q32 25.5 25 24.5 Q21.8 22 21.5 14.5 Z"
+                    fill="#1e293b"
+                    stroke="#0f172a"
+                    strokeWidth="0.9"
+                  />
+                  {/* Hair crown sheen & nape fade */}
+                  <path d="M25 9.5 Q32 7.2 39 9.5" stroke="#475569" strokeWidth="1.4" fill="none" opacity="0.65" />
+                  <path d="M26.5 19 Q32 20.5 37.5 19" stroke="#334155" strokeWidth="1" fill="none" opacity="0.7" />
+                </g>
+              )}
+              {effectiveHatType === 'peci' && (
+                <g>
+                  <path
+                    d="M22 15 Q22 23 26 24.5 Q32 25.5 38 24.5 Q42 23 42 15 Z"
+                    fill="#1e293b"
+                  />
+                  <path d="M21 14 L22 5 Q32 3.2 42 5 L43 14 Q32 13 21 14 Z" fill="#0f172a" stroke="#334155" strokeWidth="1" />
+                  <line x1="23" y1="8.5" x2="41" y2="8.5" stroke={isSarungOutfit ? '#f59e0b' : '#334155'} strokeWidth="0.9" opacity="0.75" />
+                </g>
+              )}
+              {effectiveHatType === 'iket' && (
+                <g>
+                  <path d="M21 15 Q32 4 43 15 L41.5 23 Q32 25 22.5 23 Z" fill="#291d14" stroke="#0f172a" strokeWidth="0.9" />
+                  <path d="M21.5 12 Q32 10.5 42.5 12" stroke="#d97706" strokeWidth="2.8" fill="none" />
+                  <path d="M32 12 L34.5 20" stroke="#b45309" strokeWidth="2.2" strokeLinecap="round" />
+                </g>
+              )}
+            </g>
+          ) : (
+            /* FRONT EXPRESSION VIEW (Home Interior, Portrait & NPCs) */
+            <>
+              <path
+                d="M22 14 Q22 6 32 6 Q42 6 42 14 Q42 25 32 27 Q22 25 22 14 Z"
+                fill={`url(#${skinGradId})`}
+                stroke="#3b2214"
+                strokeWidth="1.1"
+              />
+              <ellipse cx="21.5" cy="17" rx="1.8" ry="2.8" fill="#d99a73" />
+              <ellipse cx="42.5" cy="17" rx="1.8" ry="2.8" fill="#d99a73" />
+
+              <path d="M25.5 14 Q27.5 13 29.5 14" stroke="#1e293b" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+              <path d="M34.5 14 Q36.5 13 38.5 14" stroke="#1e293b" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+              <ellipse cx="27.8" cy="16.5" rx="1.6" ry="1.8" fill="#ffffff" />
+              <ellipse cx="36.8" cy="16.5" rx="1.6" ry="1.8" fill="#ffffff" />
+              <circle cx="28.1" cy="16.6" r="1.1" fill="#1e293b" />
+              <circle cx="37.1" cy="16.6" r="1.1" fill="#1e293b" />
+              <path d="M32 17.5 L31.5 20.5 L33 20.8" stroke="#a66844" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+              <path d="M29 22.8 Q32 24.8 35.5 22.6" stroke="#7c2d12" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+
+              {effectiveHatType === 'none' && isWarmOutfit && (
+                <g>
+                  <path d="M21 12 Q21.5 3.5 32 3.5 Q42.5 3.5 43 12 Z" fill="#b45309" stroke="#451a03" strokeWidth="1" />
+                  <rect x="20.5" y="9.5" width="23" height="3.8" rx="1.8" fill="#f59e0b" stroke="#78350f" strokeWidth="0.9" />
+                  <circle cx="32" cy="3.2" r="2.1" fill="#fde68a" stroke="#78350f" strokeWidth="0.7" />
+                </g>
+              )}
+              {effectiveHatType === 'none' && !isWarmOutfit && (
+                <g>
+                  <path
+                    d="M21.5 14 Q21 5 32 4.5 Q43 5 42.5 14 Q38 9.5 32 10 Q25 10 21.5 14 Z"
+                    fill="#1e293b"
+                  />
+                  <path d="M25 8 Q32 6 39 8.5" stroke="#475569" strokeWidth="1.2" fill="none" opacity="0.6" />
+                </g>
+              )}
+              {effectiveHatType === 'peci' && (
+                <g>
+                  <path d="M21 12 L22 4.5 Q32 3 42 4.5 L43 12 Q32 10.5 21 12 Z" fill="#0f172a" stroke="#334155" strokeWidth="1" />
+                  <line x1="23" y1="7" x2="41" y2="7" stroke={isSarungOutfit ? '#f59e0b' : '#334155'} strokeWidth="0.9" opacity="0.7" />
+                </g>
+              )}
+              {effectiveHatType === 'iket' && (
+                <g>
+                  <path d="M21 13 Q32 3 43 13 L41.5 6 Q32 2.5 22.5 6 Z" fill="#291d14" stroke="#0f172a" strokeWidth="0.9" />
+                  <path d="M21 10.5 Q32 9 43 10.5" stroke="#d97706" strokeWidth="2.8" fill="none" />
+                  <path d="M36 7 L43 11" stroke="#b45309" strokeWidth="2" strokeLinecap="round" />
+                </g>
+              )}
+              {effectiveHatType === 'kerudung' && (
+                <g>
+                  <path
+                    d="M20 15 Q20 4 32 4 Q44 4 44 15 L46 31 Q32 34 18 31 Z"
+                    fill={effectiveAccentColor}
+                    stroke="#475569"
+                    strokeWidth="1"
+                    opacity="0.96"
+                  />
+                  <path
+                    d="M22.5 15 Q22.5 7.5 32 7.5 Q41.5 7.5 41.5 15 Q41.5 24.5 32 26.5 Q22.5 24.5 22.5 15 Z"
+                    fill={`url(#${skinGradId})`}
+                  />
+                  <path d="M25.5 14 Q27.5 13 29.5 14" stroke="#1e293b" strokeWidth="1" fill="none" />
+                  <path d="M34.5 14 Q36.5 13 38.5 14" stroke="#1e293b" strokeWidth="1" fill="none" />
+                  <circle cx="28" cy="16.5" r="1.2" fill="#1e293b" />
+                  <circle cx="37" cy="16.5" r="1.2" fill="#1e293b" />
+                  <path d="M29 22.5 Q32 24.2 35 22.4" stroke="#7c2d12" strokeWidth="1.1" fill="none" />
+                </g>
+              )}
+              {effectiveHatType === 'topi' && (
+                <g>
+                  <path d="M21 11.5 Q32 3.5 43 11.5 Z" fill="#92400e" stroke="#451a03" strokeWidth="1" />
+                  <path d="M21 11 L47 12.2 L44 14 L21 12.5 Z" fill="#78350f" />
+                </g>
+              )}
+            </>
+          )}
           </g>
-        )}
-        {effectiveHatType === 'none' && !isWarmOutfit && (
-          <g>
-            <path
-              d="M21.5 14 Q21 5 32 4.5 Q43 5 42.5 14 Q38 9.5 32 10 Q25 10 21.5 14 Z"
-              fill="#1e293b"
-            />
-            <path d="M25 8 Q32 6 39 8.5" stroke="#475569" strokeWidth="1.2" fill="none" opacity="0.6" />
-          </g>
-        )}
-        {effectiveHatType === 'peci' && (
-          <g>
-            <path d="M21 12 L22 4.5 Q32 3 42 4.5 L43 12 Q32 10.5 21 12 Z" fill="#0f172a" stroke="#334155" strokeWidth="1" />
-            <line x1="23" y1="7" x2="41" y2="7" stroke={isSarungOutfit ? '#f59e0b' : '#334155'} strokeWidth="0.9" opacity="0.7" />
-          </g>
-        )}
-        {effectiveHatType === 'iket' && (
-          <g>
-            <path d="M21 13 Q32 3 43 13 L41.5 6 Q32 2.5 22.5 6 Z" fill="#291d14" stroke="#0f172a" strokeWidth="0.9" />
-            <path d="M21 10.5 Q32 9 43 10.5" stroke="#d97706" strokeWidth="2.8" fill="none" />
-            <path d="M36 7 L43 11" stroke="#b45309" strokeWidth="2" strokeLinecap="round" />
-          </g>
-        )}
-        {effectiveHatType === 'kerudung' && (
-          <g>
-            <path
-              d="M20 15 Q20 4 32 4 Q44 4 44 15 L46 31 Q32 34 18 31 Z"
-              fill={effectiveAccentColor}
-              stroke="#475569"
-              strokeWidth="1"
-              opacity="0.96"
-            />
-            <path
-              d="M22.5 15 Q22.5 7.5 32 7.5 Q41.5 7.5 41.5 15 Q41.5 24.5 32 26.5 Q22.5 24.5 22.5 15 Z"
-              fill={`url(#${skinGradId})`}
-            />
-            <path d="M25.5 14 Q27.5 13 29.5 14" stroke="#1e293b" strokeWidth="1" fill="none" />
-            <path d="M34.5 14 Q36.5 13 38.5 14" stroke="#1e293b" strokeWidth="1" fill="none" />
-            <circle cx="28" cy="16.5" r="1.2" fill="#1e293b" />
-            <circle cx="37" cy="16.5" r="1.2" fill="#1e293b" />
-            <path d="M29 22.5 Q32 24.2 35 22.4" stroke="#7c2d12" strokeWidth="1.1" fill="none" />
-          </g>
-        )}
-        {effectiveHatType === 'topi' && (
-          <g>
-            <path d="M21 11.5 Q32 3.5 43 11.5 Z" fill="#92400e" stroke="#451a03" strokeWidth="1" />
-            <path d="M21 11 L47 12.2 L44 14 L21 12.5 Z" fill="#78350f" />
-          </g>
-        )}
         </g>
       </svg>
     </div>

@@ -45,6 +45,7 @@ import {
   GreetingOption,
 } from '../data/gameData';
 import {
+  ArgaOutfitMode,
   DialogueOption,
   GameState,
   NpcDef,
@@ -54,12 +55,13 @@ import {
   VehicleType,
 } from '../types/game';
 import { useUiGamepadAction } from '../hooks/useGamepad';
-import { PortraitBadge } from './CharacterAvatar';
+import { CharacterSprite, PortraitBadge } from './CharacterAvatar';
 import { soundEngine } from '../utils/audio';
 
 interface DialogueModalProps {
   npc: NpcDef;
   minutesOfDay: number;
+  outfitMode?: ArgaOutfitMode;
   onSelectOption: (opt: DialogueOption, salamBonusPoints: number, salamAppropriate: boolean) => void;
   onClose: () => void;
 }
@@ -67,6 +69,7 @@ interface DialogueModalProps {
 export const DialogueModal: React.FC<DialogueModalProps> = ({
   npc,
   minutesOfDay,
+  outfitMode = 'default',
   onSelectOption,
   onClose,
 }) => {
@@ -138,20 +141,85 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({
     ? `${selectedGreeting.npcReactionId} — ${npcOpeningId}`
     : `Pilih salam pembuka berbahasa Sunda yang sopan sesuai waktu (${formatGameTime(minutesOfDay)} WIB).`;
 
+  const argaGesture: 'wave' | 'salute' | 'nod' = selectedReply
+    ? 'nod'
+    : selectedGreeting
+    ? 'salute'
+    : 'wave';
+  const gestureBadgeText = selectedReply
+    ? '🙂 Mengangguk Sopan'
+    : selectedGreeting
+    ? selectedGreeting.isAppropriate
+      ? '🙏 Rengkuh Hormat'
+      : '👋 Menyapa Warga'
+    : '👋 Melambaikan Tangan';
+  const npcAnimKey = selectedReply ? 'reply' : selectedGreeting ? 'greet' : 'open';
+
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
       <div className="w-full max-w-2xl bg-slate-900 border-2 border-amber-400 rounded-2xl p-3.5 sm:p-5 shadow-2xl max-h-[94dvh] overflow-y-auto">
+        {/* Live Animated Greeting Stage: Arga (animated gesture) <-> Warga (nod reaction) */}
+        <div className="mb-3 rounded-xl bg-gradient-to-r from-emerald-950/55 via-slate-950/90 to-amber-950/55 border border-amber-400/35 px-3 py-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-14 h-16 rounded-xl bg-slate-900/90 border border-amber-400/40 flex items-end justify-center overflow-hidden shrink-0">
+              <div className="scale-[0.82] origin-bottom -mb-1">
+                <CharacterSprite
+                  name="Arga"
+                  shirtColor="#dc2626"
+                  accentColor="#f8fafc"
+                  outfitMode={outfitMode}
+                  isArga
+                  facing="right"
+                  viewPerspective="front"
+                  gesture={argaGesture}
+                  hideNameplate
+                />
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-amber-200">Arga</div>
+              <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-amber-400/15 border border-amber-400/45 text-[10px] font-semibold text-amber-100">
+                {gestureBadgeText}
+              </span>
+            </div>
+          </div>
+
+          <div className="hidden sm:flex flex-col items-center text-[10px] text-emerald-300/90 font-semibold">
+            <span className="animate-pulse">✦ Tatap Muka Sopan ✦</span>
+          </div>
+
+          <div className="flex items-center gap-2.5 text-right">
+            <div>
+              <div className="text-xs font-bold text-amber-300">{npc.name}</div>
+              <div className="text-[10px] text-slate-400">{npc.role}</div>
+            </div>
+            <div key={npcAnimKey} className={selectedGreeting || selectedReply ? 'sunda-npc-nod' : ''}>
+              <PortraitBadge
+                name={npc.name}
+                shirtColor={npc.shirtColor}
+                accentColor={npc.accentColor}
+                hatType={npc.hatType}
+                size="md"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
-          <PortraitBadge
-            name={npc.name}
-            shirtColor={npc.shirtColor}
-            accentColor={npc.accentColor}
-            hatType={npc.hatType}
-            size="lg"
-          />
+          <div className="hidden sm:block shrink-0" key={`lg_${npcAnimKey}`}>
+            <div className={selectedGreeting || selectedReply ? 'sunda-npc-nod' : ''}>
+              <PortraitBadge
+                name={npc.name}
+                shirtColor={npc.shirtColor}
+                accentColor={npc.accentColor}
+                hatType={npc.hatType}
+                size="lg"
+              />
+            </div>
+          </div>
           <div className="flex-1">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-display text-xl font-bold text-amber-300">{npc.name}</h3>
+              <h3 className="font-display text-lg sm:text-xl font-bold text-amber-300">{npc.name}</h3>
               <span className="text-xs text-slate-400">{npc.role}</span>
             </div>
             <div className="mt-2 bg-slate-950/85 border border-slate-800 rounded-xl p-3 space-y-1.5">
@@ -1293,19 +1361,25 @@ export const ChangelogAndGuideModal: React.FC<{ onClose: () => void }> = ({ onCl
             </div>
             <ul className="space-y-1.5 text-slate-200 leading-relaxed">
               <li>
+                • <strong>🎥 Kamera Third-Person &amp; Transisi Halus:</strong> Sudut kamera mengikuti di belakang Arga (pilihan ubah ke mode <strong>Klasik</strong> tersedia di menu <strong>Pengaturan → Tampilan</strong>), dilengkapi transisi <strong>fade-to-black sinematik</strong> setiap berpindah tempat serta animasi gestur sapaan warga.
+              </li>
+              <li>
+                • <strong>🌄 Visual Sinematik Realistis:</strong> Pencahayaan <strong>Golden Hour</strong> pagi/sore, <strong>kabut pagi pegunungan</strong>, warna film, bayangan lembut terarah, simulasi <strong>SSAO &amp; Glow</strong>, pantulan genangan air hujan, serta efek <strong>Depth of Field</strong>.
+              </li>
+              <li>
+                • <strong>🎶 Budaya &amp; Kuliner Sunda Baru:</strong> Mainkan <strong>Angklung (Da-Mi-Na-Ti-La)</strong> dan saksikan <strong>Wayang Golek Si Cepot &amp; Semar</strong> di Bumi Ageung, kerja sampingan <strong>Latihan Angklung</strong>, plus kuliner <strong>Seblak Ceker, Karedok, Cilok, Colenak</strong> &amp; <strong>Tutug Oncom</strong>!
+              </li>
+              <li>
                 • <strong>🖥️ Pilihan Layar Fullscreen / Tidak saat Mulai:</strong> Saat mulai bermain atau memuat slot, pemain bisa langsung memilih mode <strong>Fullscreen (Layar Penuh)</strong> atau <strong>Mode Biasa</strong> (plus tombol ubah layar penuh di HUD).
               </li>
               <li>
-                • <strong>🧥 Pakaian Hangat (Tahap Elite+):</strong> Mulai peringkat <strong>Elite</strong>, Arga otomatis memakai <strong>jaket tebal, kupluk &amp; syal rajut hangat</strong> setiap Musim Hujan atau saat hujan/gerimis.
+                • <strong>🧥 Pakaian Hangat (Tahap Elite+) &amp; Kain Sarung (Master+):</strong> Mulai peringkat <strong>Elite</strong>, Arga memakai <strong>jaket &amp; kupluk hangat</strong> saat hujan; mulai <strong>Master</strong>, memakai <strong>Kain Sarung, Koko &amp; Peci</strong> saat sholat.
               </li>
               <li>
-                • <strong>🕌 Kain Sarung Waktu Sholat (Tahap Master+):</strong> Mulai peringkat <strong>Master</strong>, Arga otomatis mengenakan <strong>Kain Sarung tenun, Baju Koko &amp; Peci</strong> setiap waktu sholat tiba.
+                • <strong>🔊 Suara Alam, Masjid &amp; Pasar Asli:</strong> Beduk + Adzan asli, suara jangkrik malam, kokok ayam pagi, rintik hujan dalam ruangan + guntur acak, serta riuh tawar-menawar Pasar Sunda.
               </li>
               <li>
-                • <strong>🔊 Suara Alam &amp; Masjid Asli:</strong> Tabuhan <strong>Beduk + rekaman Adzan asli</strong> saat waktu sholat, suara asli <strong>jangkrik malam hari</strong> (18.00–05.00), <strong>ayam berkokok pagi hari</strong> (04.30–08.30), serta riuh tawar-menawar Pasar Sunda.
-              </li>
-              <li>
-                • <strong>📅 Kalender 12 Bulan &amp; Renovasi Warung:</strong> Penanggalan penuh <strong>JAN–DES</strong>, fitur <strong>Renovasi Warung</strong> (hingga 22 slot), <strong>Misi Harian</strong>, <strong>Prakiraan Cuaca 3 Hari</strong>, dan dukungan penuh <strong>Controller</strong>.
+                • <strong>📅 Kalender 12 Bulan &amp; Renovasi Warung:</strong> Penanggalan penuh <strong>JAN–DES</strong>, <strong>Renovasi Warung</strong> (hingga 24 slot), <strong>Misi Harian</strong>, <strong>Prakiraan Cuaca 3 Hari</strong>, dan dukungan penuh <strong>Controller</strong>.
               </li>
             </ul>
           </div>

@@ -61,7 +61,9 @@ export type TraditionName =
   | 'Ngaruwat Bumi'
   | 'Tingkeban'
   | 'Sawer'
-  | 'Botram';
+  | 'Botram'
+  | 'Wayang Golek'
+  | 'Angklung Saung';
 
 export type GameScreen = 'COVER' | 'PLAYING';
 
@@ -73,6 +75,7 @@ export type ActiveModal =
   | 'DIALOGUE'
   | 'PRAYER_REMINDER'
   | 'TRADITION_EVENT'
+  | 'CULTURAL_STAGE'
   | 'TRANSPORT_PASAR'
   | 'PASAR_SHOP'
   | 'HP_PHONE'
@@ -94,6 +97,7 @@ export interface GameSettings {
   batterySaver: boolean;
   language: 'id' | 'su';
   rogAllyMode: boolean;
+  cameraMode: 'third_person' | 'klasik';
 }
 
 export interface ItemDef {
@@ -127,7 +131,8 @@ export interface Hotspot {
     | 'fruit_picking'
     | 'forage_hutan'
     | 'clean_air'
-    | 'tradition_board';
+    | 'tradition_board'
+    | 'cultural_stage';
   targetScene?: SceneId;
   targetSpawn?: { x: number; y: number };
   subtitle?: string;
@@ -291,7 +296,8 @@ export type DailyMissionTaskId =
   | 'forage_herbal'
   | 'catch_fish'
   | 'side_job'
-  | 'pray_jamaah';
+  | 'pray_jamaah'
+  | 'cultural_stage';
 
 export interface DailyMissionTask {
   id: DailyMissionTaskId;

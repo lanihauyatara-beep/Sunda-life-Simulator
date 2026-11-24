@@ -156,6 +156,59 @@
   will-change: transform, opacity;
 }
 
+@keyframes sundaMorningMist {
+  0% {
+    transform: translate3d(-4%, 0, 0) scale(1.03);
+  }
+  50% {
+    transform: translate3d(4%, -1.2%, 0) scale(1.07);
+  }
+  100% {
+    transform: translate3d(-4%, 0, 0) scale(1.03);
+  }
+}
+
+.sunda-morning-mist {
+  animation: sundaMorningMist 28s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes sundaAngklungShake {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-4deg) translateX(-1.5px);
+  }
+  40% {
+    transform: rotate(4deg) translateX(1.5px);
+  }
+  60% {
+    transform: rotate(-3deg) translateX(-1px);
+  }
+  80% {
+    transform: rotate(3deg) translateX(1px);
+  }
+}
+
+.sunda-angklung-shake {
+  animation: sundaAngklungShake 0.36s ease-in-out;
+}
+
+@keyframes sundaWayangSway {
+  0%, 100% {
+    transform: rotate(-2.5deg) translateY(0px);
+  }
+  50% {
+    transform: rotate(2.5deg) translateY(-3px);
+  }
+}
+
+.sunda-wayang-sway {
+  transform-origin: 50% 90%;
+  animation: sundaWayangSway 3.4s ease-in-out infinite;
+}
+
 /* Realistic Character Walking & Idle Animations */
 @keyframes sundaWalkBob {
   0%, 100% {
@@ -275,6 +328,153 @@
 .sunda-idle-breath {
   transform-origin: 32px 58px;
   animation: sundaIdleBreath 3.2s ease-in-out infinite;
+}
+
+/* Specific Greeting & Nod Animations when Arga greets Warga */
+@keyframes sundaGreetArmWave {
+  0% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-122deg);
+  }
+  38% {
+    transform: rotate(-102deg);
+  }
+  56% {
+    transform: rotate(-132deg);
+  }
+  74% {
+    transform: rotate(-105deg);
+  }
+  90% {
+    transform: rotate(-124deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes sundaGreetSaluteL {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25%, 70% {
+    transform: rotate(-52deg) translate(2px, -3px);
+  }
+}
+
+@keyframes sundaGreetSaluteR {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25%, 70% {
+    transform: rotate(52deg) translate(-2px, -3px);
+  }
+}
+
+@keyframes sundaGreetNod {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(1.8px) rotate(7deg);
+  }
+  45% {
+    transform: translateY(0.2px) rotate(-1deg);
+  }
+  68% {
+    transform: translateY(1.6px) rotate(6deg);
+  }
+}
+
+@keyframes sundaNpcNod {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  30% {
+    transform: translateY(3px) scale(0.985) rotate(-2deg);
+  }
+  60% {
+    transform: translateY(-1px) scale(1.01) rotate(1deg);
+  }
+}
+
+.sunda-greet-arm-wave {
+  transform-origin: 46px 33px;
+  animation: sundaGreetArmWave 1.35s ease-in-out infinite;
+}
+
+.sunda-greet-salute-l {
+  transform-origin: 17px 33px;
+  animation: sundaGreetSaluteL 1.5s ease-in-out infinite;
+}
+
+.sunda-greet-salute-r {
+  transform-origin: 46px 33px;
+  animation: sundaGreetSaluteR 1.5s ease-in-out infinite;
+}
+
+.sunda-greet-nod {
+  transform-origin: 32px 28px;
+  animation: sundaGreetNod 1.2s ease-in-out infinite;
+}
+
+.sunda-npc-nod {
+  animation: sundaNpcNod 0.9s ease-in-out 2;
+}
+
+/* Iconic Warung Transaction Money & Coin Bubble Animations */
+@keyframes sundaMoneyFloat {
+  0% {
+    transform: translate(-50%, 16px) scale(0.65);
+    opacity: 0;
+  }
+  16% {
+    transform: translate(-50%, -6px) scale(1.12);
+    opacity: 1;
+  }
+  32% {
+    transform: translate(-50%, -18px) scale(1);
+    opacity: 1;
+  }
+  80% {
+    transform: translate(-50%, -68px) scale(1.03);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -94px) scale(0.92);
+    opacity: 0;
+  }
+}
+
+@keyframes sundaCoinBubble {
+  0% {
+    transform: translate(-50%, 8px) scale(0.4) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    transform: translate(calc(-50% + var(--coin-dx, 0px) * 0.45), -16px) scale(1.15) rotate(var(--coin-rot, 18deg));
+    opacity: 1;
+  }
+  75% {
+    transform: translate(calc(-50% + var(--coin-dx, 0px)), -74px) scale(1) rotate(calc(var(--coin-rot, 18deg) * 2));
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--coin-dx, 0px) * 1.15), -106px) scale(0.75) rotate(calc(var(--coin-rot, 18deg) * 2.5));
+    opacity: 0;
+  }
+}
+
+.sunda-money-float {
+  animation: sundaMoneyFloat 1.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.sunda-coin-bubble {
+  animation: sundaCoinBubble 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
 }
 
 /* Custom thin dark scrollbar */

@@ -9,7 +9,7 @@ interface HomeInteriorViewProps {
   gameState: GameState;
   onChangeRoom: (room: SceneId) => void;
   onSleep: (mode?: 'auto' | 'nap' | 'next_day') => void;
-  onCookMeal: (mealType: 'kopi' | 'liwet') => void;
+  onCookMeal: (mealType: 'kopi' | 'liwet' | 'tutug_oncom') => void;
   onPrayAtHome: () => void;
   onOpenDebtBook: () => void;
   onExitHouse: () => void;
@@ -169,13 +169,20 @@ export const HomeInteriorView: React.FC<HomeInteriorViewProps> = ({
               <p className="text-xs text-slate-300 mb-4">
                 Masak hidangan hangat sendiri di rumah untuk memulihkan energi Arga lebih hemat!
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   onClick={() => onCookMeal('kopi')}
                   className="p-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-400/50 text-left transition-colors"
                 >
                   <div className="font-bold text-amber-200 text-sm">Seduh Kopi & Ubi Rebus</div>
                   <div className="text-xs text-slate-400 mt-1">Biaya bahan Rp 2.500 · +20% Energi</div>
+                </button>
+                <button
+                  onClick={() => onCookMeal('tutug_oncom')}
+                  className="p-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-400/50 text-left transition-colors"
+                >
+                  <div className="font-bold text-amber-200 text-sm">Masak Tutug Oncom & Teh Poci</div>
+                  <div className="text-xs text-slate-400 mt-1">Biaya bahan Rp 5.000 · +38% Energi</div>
                 </button>
                 <button
                   onClick={() => onCookMeal('liwet')}

@@ -13,6 +13,8 @@ import {
   Lock,
   Sparkles,
   Trophy,
+  Banknote,
+  Coins,
 } from 'lucide-react';
 import {
   ASSETS,
@@ -64,6 +66,12 @@ interface WarungInteriorViewProps {
   onExitWarung: () => void;
 }
 
+interface TxBubble {
+  id: string;
+  amount: number;
+  customerName: string;
+}
+
 export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
   gameState,
   settings,
@@ -80,6 +88,8 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
   const [currentOrder, setCurrentOrder] = useState<CustomerOrder | null>(null);
   const [statusNote, setStatusNote] = useState<string>('');
   const [waitState, setWaitState] = useState<{ remainingSec: number; progressPct: number } | null>(null);
+  const [txBubbles, setTxBubbles] = useState<TxBubble[]>([]);
+  const [cashFlash, setCashFlash] = useState(false);
 
   const hour = gameState.minutesOfDay / 60;
   const withinOperatingHours = hour >= 9 && hour < 17;
@@ -291,9 +301,22 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
 
     if (isComplete) {
       const completedOrder = { ...currentOrder, fulfilled: updatedFulfilled };
+      const earned = completedOrder.items.reduce((sum, it) => {
+        const def = ITEM_MAP[it.itemId];
+        const unitPrice = gameState.customPrices[it.itemId] ?? def?.retailPrice ?? 0;
+        return sum + unitPrice * it.qty;
+      }, 0);
+      const bubbleId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      setTxBubbles((prev) => [...prev, { id: bubbleId, amount: earned, customerName: completedOrder.customerName }]);
+      setCashFlash(true);
+      window.setTimeout(() => setCashFlash(false), 650);
+      window.setTimeout(() => {
+        setTxBubbles((prev) => prev.filter((b) => b.id !== bubbleId));
+      }, 1850);
+
       scheduleNextBuyerCooldown(false);
       setCurrentOrder(null);
-      setStatusNote(`Pesanan ${completedOrder.customerName} selesai! Jeda sebelum pembeli berikutnya...`);
+      setStatusNote(`Pesanan ${completedOrder.customerName} selesai! (+${formatRupiah(earned)})`);
       onFinishOrder(completedOrder, true);
     } else {
       setCurrentOrder({ ...currentOrder, fulfilled: updatedFulfilled });
@@ -410,8 +433,75 @@ export const WarungInteriorView: React.FC<WarungInteriorViewProps> = ({
                   if (itemId) handleGiveItem(itemId);
                 }
               }}
-              className="sm:col-span-5 bg-slate-950/90 border border-amber-400/60 rounded-2xl p-3 sm:p-4 flex flex-col justify-between min-h-[210px] sm:min-h-[270px]"
+              className={`relative sm:col-span-5 bg-slate-950/90 rounded-2xl p-3 sm:p-4 flex flex-col justify-between min-h-[210px] sm:min-h-[270px] border transition-all duration-300 ${
+                cashFlash
+                  ? 'border-emerald-400 ring-4 ring-emerald-400/35 shadow-[0_0_32px_rgba(16,185,129,0.45)]'
+                  : 'border-amber-400/60'
+              }`}
             >
+              {/* Iconic Money & Coin Bubble Burst Overlay on Successful Transaction */}
+              {txBubbles.length > 0 && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 z-30 overflow-visible"
+                >
+                  {txBubbles.map((bubble) => {
+                    const coinOffsets = [
+                      { dx: '-56px', rot: '-22deg', delay: '0ms', icon: 'coin' },
+                      { dx: '-28px', rot: '18deg', delay: '70ms', icon: 'note' },
+                      { dx: '0px', rot: '-12deg', delay: '120ms', icon: 'coin' },
+                      { dx: '30px', rot: '24deg', delay: '60ms', icon: 'coin' },
+                      { dx: '56px', rot: '-18deg', delay: '140ms', icon: 'note' },
+                    ] as const;
+                    return (
+                      <div key={bubble.id} className="absolute left-1/2 top-[44%]">
+                        {coinOffsets.map((c, idx) => (
+                          <div
+                            key={idx}
+                            style={
+                              {
+                                '--coin-dx': c.dx,
+                                '--coin-rot': c.rot,
+                                animationDelay: c.delay,
+                              } as React.CSSProperties
+                            }
+                            className="sunda-coin-bubble absolute left-0 top-0"
+                          >
+                            <div
+                              className={`w-8 h-8 rounded-full border-2 shadow-lg flex items-center justify-center ${
+                                c.icon === 'note'
+                                  ? 'bg-emerald-500 border-emerald-200 text-slate-950'
+                                  : 'bg-amber-400 border-yellow-100 text-amber-950'
+                              }`}
+                            >
+                              {c.icon === 'note' ? (
+                                <Banknote className="w-4 h-4" />
+                              ) : (
+                                <Coins className="w-4 h-4" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="sunda-money-float absolute left-0 top-0 flex flex-col items-center">
+                          <div className="px-4 py-2 rounded-full bg-gradient-to-r from-emerald-400 via-emerald-300 to-amber-300 text-slate-950 border-2 border-white shadow-[0_8px_28px_rgba(16,185,129,0.6)] flex items-center gap-2 whitespace-nowrap">
+                            <span className="w-6 h-6 rounded-full bg-amber-400 border border-amber-900/30 flex items-center justify-center shadow-inner">
+                              <Banknote className="w-3.5 h-3.5 text-emerald-950" />
+                            </span>
+                            <span className="font-mono-num font-extrabold text-sm sm:text-base">
+                              +{formatRupiah(bubble.amount)}
+                            </span>
+                            <Sparkles className="w-4 h-4 text-amber-700" />
+                          </div>
+                          <span className="mt-1 px-2 py-0.5 rounded-md bg-slate-950/90 border border-emerald-400/60 text-[10px] font-bold text-emerald-300 whitespace-nowrap shadow">
+                            Hatur nuhun, {bubble.customerName}!
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {!gameState.warungOpen ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
                   <AlertCircle className="w-10 h-10 text-amber-400 mb-2" />

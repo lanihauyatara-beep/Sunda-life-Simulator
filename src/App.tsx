@@ -86,6 +86,7 @@ import {
   PrayerReminderModal,
   TraditionModal,
 } from './components/ModalsAndOverlays';
+import { CulturalStageModal } from './components/CulturalStageModal';
 import { LandscapeOrientationGuard, OfflineNoticePill } from './components/PWAAndOrientationUI';
 
 const SLOT_STORAGE_PREFIX = 'sunda_life_sim_slot_';
@@ -332,6 +333,55 @@ export default function App() {
 
   const nearestActionRef = useRef<{ label: string; execute: () => void } | null>(null);
   const [nearestActionLabel, setNearestActionLabel] = useState<string | null>(null);
+  const [argaWorldGesture, setArgaWorldGesture] = useState<'none' | 'wave' | 'salute' | 'nod'>('none');
+  const gestureTimerRef = useRef<number | null>(null);
+  const [sceneFadeOpacity, setSceneFadeOpacity] = useState<number>(0);
+  const isTransitioningRef = useRef<boolean>(false);
+  const fadeTimersRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    return () => {
+      fadeTimersRef.current.forEach((id) => window.clearTimeout(id));
+      fadeTimersRef.current = [];
+      if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
+    };
+  }, []);
+
+  const triggerWorldGreeting = useCallback((gesture: 'wave' | 'salute' | 'nod', durationMs = 1500) => {
+    setArgaWorldGesture(gesture);
+    if (gestureTimerRef.current !== null) window.clearTimeout(gestureTimerRef.current);
+    gestureTimerRef.current = window.setTimeout(() => {
+      setArgaWorldGesture('none');
+      gestureTimerRef.current = null;
+    }, durationMs);
+  }, []);
+
+  const transitionToScene = useCallback(
+    (applyFn: () => void, sfx: 'door' | 'click' | 'none' = 'click') => {
+      if (isTransitioningRef.current) return;
+      isTransitioningRef.current = true;
+      fadeTimersRef.current.forEach((id) => window.clearTimeout(id));
+      fadeTimersRef.current = [];
+
+      if (sfx === 'door') soundEngine.doorChime();
+      else if (sfx === 'click') soundEngine.click();
+
+      setSceneFadeOpacity(1);
+      const t1 = window.setTimeout(() => {
+        applyFn();
+        const t2 = window.setTimeout(() => {
+          setSceneFadeOpacity(0);
+          const t3 = window.setTimeout(() => {
+            isTransitioningRef.current = false;
+          }, 320);
+          fadeTimersRef.current.push(t3);
+        }, 65);
+        fadeTimersRef.current.push(t2);
+      }, 260);
+      fadeTimersRef.current.push(t1);
+    },
+    []
+  );
 
   useEffect(() => {
     const syncFullscreen = () => {
@@ -673,18 +723,21 @@ export default function App() {
   const handleChangeScene = useCallback(
     (target: SceneId, customSpawn?: { x: number; y: number }) => {
       const sc = SCENES[target];
-      if (sc.isIndoor) soundEngine.doorChime();
-      else soundEngine.click();
-      setGameState((prev) => {
-        const { next } = advanceClockState(prev, 3);
-        return {
-          ...next,
-          scene: target,
-          playerPos: customSpawn ?? sc.defaultSpawn,
-        };
-      });
+      transitionToScene(
+        () => {
+          setGameState((prev) => {
+            const { next } = advanceClockState(prev, 3);
+            return {
+              ...next,
+              scene: target,
+              playerPos: customSpawn ?? sc.defaultSpawn,
+            };
+          });
+        },
+        sc.isIndoor ? 'door' : 'click'
+      );
     },
-    []
+    [transitionToScene]
   );
 
   const handleTriggerHotspot = useCallback(
@@ -708,6 +761,10 @@ export default function App() {
       }
       if (hs.actionType === 'fruit_picking') {
         setActiveModal('FRUIT_PICKING');
+        return;
+      }
+      if (hs.actionType === 'cultural_stage') {
+        setActiveModal('CULTURAL_STAGE');
         return;
       }
       if (hs.actionType === 'tradition_board') {
@@ -1131,9 +1188,11 @@ export default function App() {
     }
   };
 
-  const handleCookDapur = (mealType: 'kopi' | 'liwet') => {
-    const cost = mealType === 'kopi' ? 2500 : 7500;
-    const gain = mealType === 'kopi' ? 20 : 50;
+  const handleCookDapur = (mealType: 'kopi' | 'liwet' | 'tutug_oncom') => {
+    const cost = mealType === 'kopi' ? 2500 : mealType === 'tutug_oncom' ? 5000 : 7500;
+    const gain = mealType === 'kopi' ? 20 : mealType === 'tutug_oncom' ? 38 : 50;
+    const mealLabel =
+      mealType === 'kopi' ? 'Kopi' : mealType === 'tutug_oncom' ? 'Tutug Oncom' : 'Nasi Liwet';
     if (gameState.money < cost) {
       soundEngine.error();
       showToast('Uang belanja dapur tidak cukup!');
@@ -1151,13 +1210,13 @@ export default function App() {
           minutesOfDay: next.minutesOfDay,
           type: 'expense',
           category: 'konsumsi',
-          title: `Masak di Dapur (${mealType === 'kopi' ? 'Kopi' : 'Nasi Liwet'})`,
+          title: `Masak di Dapur (${mealLabel})`,
           detail: `Energi +${gain}%`,
           amount: cost,
         }),
       };
     });
-    showToast(`Masakan dapur selesai! Energi Arga pulih +${gain}%.`);
+    showToast(`Masakan dapur (${mealLabel}) selesai! Energi Arga pulih +${gain}%.`);
   };
 
   const handleSelectPasarRide = (fare: number, minutes: number, vehicleName: string) => {
@@ -1170,35 +1229,37 @@ export default function App() {
     if (fare > 0) soundEngine.cash();
     const goingToPasar = gameState.scene !== 'pasar';
     const destScene: SceneId = goingToPasar ? 'pasar' : 'kampung_warung';
-    setGameState((prev) => {
-      const { next } = advanceClockState(prev, minutes);
-      return {
-        ...next,
-        money: next.money - fare,
-        scene: destScene,
-        playerPos: SCENES[destScene].defaultSpawn,
-        transactions:
-          fare > 0
-            ? appendTransaction(next.transactions, {
-                day: next.day,
-                minutesOfDay: next.minutesOfDay,
-                type: 'expense',
-                category: 'transport',
-                title: `Ongkos ${vehicleName}`,
-                detail: goingToPasar ? 'Perjalanan ke Pasar' : 'Pulang ke Kampung',
-                amount: fare,
-              })
-            : next.transactions,
-      };
-    });
     setActiveModal(null);
-    showToast(
-      fare === 0
-        ? `Arga berjalan kaki pulang dan tiba di ${goingToPasar ? 'Pasar Tradisional Sunda' : 'Kampung Sukamaju'}.`
-        : `Arga naik ${vehicleName} (${formatRupiah(fare)}) dan tiba di ${
-            goingToPasar ? 'Pasar Tradisional Sunda' : 'Kampung Sukamaju'
-          }.`
-    );
+    transitionToScene(() => {
+      setGameState((prev) => {
+        const { next } = advanceClockState(prev, minutes);
+        return {
+          ...next,
+          money: next.money - fare,
+          scene: destScene,
+          playerPos: SCENES[destScene].defaultSpawn,
+          transactions:
+            fare > 0
+              ? appendTransaction(next.transactions, {
+                  day: next.day,
+                  minutesOfDay: next.minutesOfDay,
+                  type: 'expense',
+                  category: 'transport',
+                  title: `Ongkos ${vehicleName}`,
+                  detail: goingToPasar ? 'Perjalanan ke Pasar' : 'Pulang ke Kampung',
+                  amount: fare,
+                })
+              : next.transactions,
+        };
+      });
+      showToast(
+        fare === 0
+          ? `Arga berjalan kaki pulang dan tiba di ${goingToPasar ? 'Pasar Tradisional Sunda' : 'Kampung Sukamaju'}.`
+          : `Arga naik ${vehicleName} (${formatRupiah(fare)}) dan tiba di ${
+              goingToPasar ? 'Pasar Tradisional Sunda' : 'Kampung Sukamaju'
+            }.`
+      );
+    }, 'none');
   };
 
   const handlePasarCheckout = (
@@ -1696,6 +1757,9 @@ export default function App() {
           moveVecRef={moveVecRef}
           isPaused={activeModal !== null}
           batterySaver={settings.batterySaver}
+          graphicsQuality={settings.graphicsQuality}
+          cameraMode={settings.cameraMode ?? 'third_person'}
+          argaGesture={argaWorldGesture}
           onUpdatePlayerPos={(pos, facing) =>
             setGameState((prev) => ({ ...prev, playerPos: pos, facing }))
           }
@@ -2127,10 +2191,12 @@ export default function App() {
         <DialogueModal
           npc={activeNpc}
           minutesOfDay={gameState.minutesOfDay}
+          outfitMode={argaOutfitInfo.mode}
           onSelectOption={handleDialogueChoice}
           onClose={() => {
             setActiveModal(null);
             setActiveNpc(null);
+            triggerWorldGreeting('wave', 1500);
           }}
         />
       )}
@@ -2143,38 +2209,40 @@ export default function App() {
           onPrayNow={(where) => {
             soundEngine.angklungSuccess();
             const prayer = activePrayerAlert.prayer;
-            setGameState((prev) => {
-              const { next } = advanceClockState(prev, 12);
-              const nextPrayed = next.prayedToday.includes(prayer)
-                ? next.prayedToday
-                : [...next.prayedToday, prayer];
-              return {
-                ...next,
-                scene: where === 'masjid' ? 'kampung_warung' : 'rumah_kamar',
-                playerPos: where === 'masjid' ? { x: 76, y: 47 } : { x: 35, y: 65 },
-                energy: Math.min(100, next.energy + (where === 'masjid' ? 10 : 8)),
-                reputation:
-                  where === 'masjid'
-                    ? Math.min(5, Number((next.reputation + 0.05).toFixed(2)))
-                    : next.reputation,
-                prayedToday: nextPrayed,
-                activityPoints: computeEffectiveActivityPoints(prev) + 10,
-                totalPrayersCount: (next.totalPrayersCount ?? 0) + 1,
-                dailyMissions: ensureDailyMissions(
-                  next.day,
-                  next.dailyMissions,
-                  next.greetedNpcsToday.length,
-                  nextPrayed.length
-                ),
-              };
-            });
             setActiveModal(null);
             setActivePrayerAlert(null);
-            showToast(
-              `Alhamdulillah, Arga menunaikan sholat ${prayer} ${
-                where === 'masjid' ? 'di Masjid Al-Ikhlas' : 'di Sajadah Rumah'
-              } (+10 Poin).`
-            );
+            transitionToScene(() => {
+              setGameState((prev) => {
+                const { next } = advanceClockState(prev, 12);
+                const nextPrayed = next.prayedToday.includes(prayer)
+                  ? next.prayedToday
+                  : [...next.prayedToday, prayer];
+                return {
+                  ...next,
+                  scene: where === 'masjid' ? 'kampung_warung' : 'rumah_kamar',
+                  playerPos: where === 'masjid' ? { x: 76, y: 47 } : { x: 35, y: 65 },
+                  energy: Math.min(100, next.energy + (where === 'masjid' ? 10 : 8)),
+                  reputation:
+                    where === 'masjid'
+                      ? Math.min(5, Number((next.reputation + 0.05).toFixed(2)))
+                      : next.reputation,
+                  prayedToday: nextPrayed,
+                  activityPoints: computeEffectiveActivityPoints(prev) + 10,
+                  totalPrayersCount: (next.totalPrayersCount ?? 0) + 1,
+                  dailyMissions: ensureDailyMissions(
+                    next.day,
+                    next.dailyMissions,
+                    next.greetedNpcsToday.length,
+                    nextPrayed.length
+                  ),
+                };
+              });
+              showToast(
+                `Alhamdulillah, Arga menunaikan sholat ${prayer} ${
+                  where === 'masjid' ? 'di Masjid Al-Ikhlas' : 'di Sajadah Rumah'
+                } (+10 Poin).`
+              );
+            }, 'none');
           }}
           onAcknowledgeCloseOnly={() => {
             setActiveModal(null);
@@ -2398,7 +2466,55 @@ export default function App() {
         />
       )}
 
+      {activeModal === 'CULTURAL_STAGE' && (
+        <CulturalStageModal
+          onCompleteActivity={(mode, title, rewardMoney, rewardPoints) => {
+            soundEngine.cash();
+            setGameState((prev) => {
+              const { next } = advanceClockState(prev, 25);
+              return {
+                ...next,
+                money: next.money + rewardMoney,
+                reputation: Math.min(5, Number((next.reputation + 0.06).toFixed(2))),
+                wargaSatisfaction: Math.min(100, next.wargaSatisfaction + 4),
+                activityPoints: computeEffectiveActivityPoints(prev) + rewardPoints,
+                totalActivitiesCount: (next.totalActivitiesCount ?? 0) + 1,
+                transactions: appendTransaction(next.transactions, {
+                  day: next.day,
+                  minutesOfDay: next.minutesOfDay,
+                  type: 'income',
+                  category: 'tradisi',
+                  title: mode === 'angklung' ? `Pentas Angklung (${title})` : `Apresiasi Wayang Golek`,
+                  detail: `Bumi Ageung · +${rewardPoints} Poin`,
+                  amount: rewardMoney,
+                }),
+                dailyMissions: advanceDailyMissionProgress(
+                  next.dailyMissions,
+                  next.day,
+                  'cultural_stage',
+                  1,
+                  next.greetedNpcsToday.length,
+                  next.prayedToday.length
+                ),
+              };
+            });
+            setActiveModal(null);
+            showToast(
+              `Luar biasa! ${title} di Bumi Ageung sukses (+${formatRupiah(rewardMoney)}, +${rewardPoints} Poin)!`
+            );
+          }}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+
       {activeModal === 'CHANGELOG' && <ChangelogAndGuideModal onClose={() => setActiveModal(null)} />}
+
+      {/* Smooth Cinematic Fade-to-Black Scene Transition Curtain */}
+      <div
+        aria-hidden="true"
+        style={{ opacity: sceneFadeOpacity }}
+        className="fixed inset-0 z-[120] bg-black pointer-events-none transition-opacity duration-300 ease-in-out"
+      />
     </div>
   );
 }

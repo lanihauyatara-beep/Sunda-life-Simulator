@@ -21,6 +21,12 @@ export default defineConfig(() => {
           'audio/adzan.mp3',
           'audio/crickets.mp3',
           'audio/rooster.mp3',
+          'audio/angklung_note.mp3',
+          'audio/angklung_phrase.mp3',
+          'audio/goong.mp3',
+          'audio/kendang_tak.mp3',
+          'audio/kendang_thung.mp3',
+          'audio/kendang_dha.mp3',
         ],
         manifest: {
           id: '/',

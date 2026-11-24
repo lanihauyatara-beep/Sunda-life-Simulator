@@ -100,7 +100,7 @@ export const WarungAsihView: React.FC<WarungAsihViewProps> = ({
           </div>
 
           {/* Menu Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3 max-h-[320px] overflow-y-auto pr-1">
             {menuItems.map((menu, idx) => {
               const disabled = !isWarungAsihOpen || gameState.money < menu.retailPrice || gameState.energy >= 100;
               const isFocused = focusedIdx === idx;

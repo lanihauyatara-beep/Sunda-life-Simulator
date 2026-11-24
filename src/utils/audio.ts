@@ -53,6 +53,11 @@ class SoundEngine {
   private roosterAudio: HTMLAudioElement | null = null;
   private lastRoosterPlayedAt = 0;
 
+  // Decoded real cultural instrument AudioBuffers (/public/audio/*.mp3)
+  private audioBufferCache = new Map<string, AudioBuffer>();
+  private audioBufferPending = new Map<string, Promise<AudioBuffer | null>>();
+  private activeAngklungPhraseSource: AudioBufferSourceNode | null = null;
+
   private ensureContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
     if (!this.ctx) {
@@ -72,9 +77,151 @@ class SoundEngine {
     return this.ctx;
   }
 
+  private async loadAudioBuffer(url: string): Promise<AudioBuffer | null> {
+    const cached = this.audioBufferCache.get(url);
+    if (cached) return cached;
+
+    const existing = this.audioBufferPending.get(url);
+    if (existing) return existing;
+
+    const ctx = this.ensureContext();
+    if (!ctx || typeof fetch === 'undefined') return null;
+
+    const task = fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((arr) => ctx.decodeAudioData(arr))
+      .then((decoded) => {
+        this.audioBufferCache.set(url, decoded);
+        this.audioBufferPending.delete(url);
+        return decoded;
+      })
+      .catch(() => {
+        this.audioBufferPending.delete(url);
+        return null;
+      });
+
+    this.audioBufferPending.set(url, task);
+    return task;
+  }
+
+  private preloadRealCulturalAudio() {
+    const urls = [
+      '/audio/angklung_note.mp3',
+      '/audio/angklung_phrase.mp3',
+      '/audio/goong.mp3',
+      '/audio/kendang_tak.mp3',
+      '/audio/kendang_thung.mp3',
+      '/audio/kendang_dha.mp3',
+    ];
+    urls.forEach((u) => {
+      void this.loadAudioBuffer(u);
+    });
+  }
+
+  private scheduleDecodedBuffer(
+    buffer: AudioBuffer,
+    options: {
+      delay?: number;
+      playbackRate?: number;
+      gain?: number;
+      maxDuration?: number;
+      fadeOutDur?: number;
+      trackAsAngklungPhrase?: boolean;
+    } = {}
+  ) {
+    const ctx = this.ensureContext();
+    if (!ctx || this.sfxVolume <= 0.01) return;
+
+    const {
+      delay = 0,
+      playbackRate = 1,
+      gain = 0.9,
+      maxDuration,
+      fadeOutDur = 0.25,
+      trackAsAngklungPhrase = false,
+    } = options;
+
+    if (trackAsAngklungPhrase && this.activeAngklungPhraseSource) {
+      try {
+        this.activeAngklungPhraseSource.stop();
+      } catch {
+        // already stopped
+      }
+      this.activeAngklungPhraseSource = null;
+    }
+
+    const now = ctx.currentTime + delay;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.playbackRate.setValueAtTime(playbackRate, now);
+
+    const gNode = ctx.createGain();
+    const targetGain = Math.max(0.001, Math.min(1.4, this.sfxVolume * gain));
+    gNode.gain.setValueAtTime(targetGain, now);
+
+    const rawDur = buffer.duration / Math.max(0.25, playbackRate);
+    const playDur = maxDuration ? Math.min(rawDur, maxDuration) : rawDur;
+
+    if (playDur > fadeOutDur) {
+      const fadeStart = now + playDur - fadeOutDur;
+      gNode.gain.setValueAtTime(targetGain, fadeStart);
+      gNode.gain.linearRampToValueAtTime(0.0001, now + playDur);
+    }
+
+    src.connect(gNode);
+    gNode.connect(ctx.destination);
+
+    if (trackAsAngklungPhrase) {
+      this.activeAngklungPhraseSource = src;
+      src.onended = () => {
+        if (this.activeAngklungPhraseSource === src) {
+          this.activeAngklungPhraseSource = null;
+        }
+      };
+    }
+
+    src.start(now);
+    src.stop(now + playDur + 0.03);
+  }
+
+  private playRealSample(
+    url: string,
+    options: {
+      delay?: number;
+      playbackRate?: number;
+      gain?: number;
+      maxDuration?: number;
+      fadeOutDur?: number;
+      trackAsAngklungPhrase?: boolean;
+      fallback?: () => void;
+    } = {}
+  ) {
+    if (this.sfxVolume <= 0.01) return;
+    const cached = this.audioBufferCache.get(url);
+    if (cached) {
+      this.scheduleDecodedBuffer(cached, options);
+      return;
+    }
+
+    const startedAt = performance.now();
+    void this.loadAudioBuffer(url).then((buf) => {
+      if (buf) {
+        const elapsedSec = (performance.now() - startedAt) / 1000;
+        const adjustedDelay = Math.max(0, (options.delay ?? 0) - elapsedSec);
+        this.scheduleDecodedBuffer(buf, { ...options, delay: adjustedDelay });
+      } else if (options.fallback) {
+        options.fallback();
+      }
+    });
+  }
+
   public unlock() {
     this.ensureContext();
     this.isAudioUnlocked = true;
+    this.preloadRealCulturalAudio();
     if (this.lastEnvState) {
       this.updateEnvironment(this.lastEnvState);
     }
@@ -1231,11 +1378,177 @@ class SoundEngine {
     }
   }
 
-  public angklungSuccess() {
-    // Warm traditional Sundanese pentatonic arpeggio
+  private angklungSuccessSynthFallback() {
     const notes = [440, 523.25, 587.33, 783.99, 880];
     notes.forEach((f, idx) => {
       this.playTone(f, 0.22, 'triangle', 0.1, idx * 0.07);
+    });
+  }
+
+  /**
+   * Plays authentic recorded Sundanese Angklung melodic phrase (/audio/angklung_phrase.mp3)
+   */
+  public angklungSuccess() {
+    if (this.sfxVolume <= 0.01) return;
+    this.playRealSample('/audio/angklung_phrase.mp3', {
+      gain: 0.9,
+      maxDuration: 2.35,
+      fadeOutDur: 0.45,
+      trackAsAngklungPhrase: true,
+      fallback: () => this.angklungSuccessSynthFallback(),
+    });
+  }
+
+  private playAngklungNoteSynthFallback(noteIndex: number) {
+    if (this.sfxVolume <= 0.01) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const freqs = [293.66, 329.63, 392.0, 440.0, 523.25];
+    const baseFreq = freqs[((noteIndex % freqs.length) + freqs.length) % freqs.length];
+    const now = ctx.currentTime;
+    const scale = Math.max(0.05, this.sfxVolume);
+
+    const pulses = 7;
+    for (let p = 0; p < pulses; p++) {
+      const t = now + p * 0.055;
+      const env = Math.sin(((p + 0.5) / pulses) * Math.PI);
+      const dur = 0.075;
+
+      [1, 2].forEach((mult, idx) => {
+        const osc = ctx.createOscillator();
+        osc.type = idx === 0 ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(baseFreq * mult * (1 + (Math.random() - 0.5) * 0.008), t);
+
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(baseFreq * mult * 1.15, t);
+        bp.Q.setValueAtTime(1.6, t);
+
+        const g = ctx.createGain();
+        const peak = (idx === 0 ? 0.18 : 0.09) * scale * (0.45 + 0.55 * env);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0005, peak), t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+        osc.connect(bp);
+        bp.connect(g);
+        g.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      });
+
+      this.playFilteredNoiseBurst(0.028, 'bandpass', 1400 + noteIndex * 180, 900, 3.2, 0.045 * env, p * 0.055);
+    }
+  }
+
+  /**
+   * Authentic real bamboo Angklung note (Laras Da-Mi-Na-Ti-La) pitch-shifted from real recording (/audio/angklung_note.mp3, ~495 Hz)
+   */
+  public playAngklungNote(noteIndex: number) {
+    if (this.sfxVolume <= 0.01) return;
+    // Sundanese pentatonic scale (Da - Mi - Na - Ti - La)
+    const freqs = [293.66, 329.63, 392.0, 440.0, 523.25];
+    const targetFreq = freqs[((noteIndex % freqs.length) + freqs.length) % freqs.length];
+    // Real sample /audio/angklung_note.mp3 fundamental is 495 Hz (B4 + 990 Hz bamboo octave pair)
+    const playbackRate = targetFreq / 495.0;
+
+    this.playRealSample('/audio/angklung_note.mp3', {
+      playbackRate,
+      gain: 0.95,
+      maxDuration: 0.56,
+      fadeOutDur: 0.14,
+      fallback: () => this.playAngklungNoteSynthFallback(noteIndex),
+    });
+  }
+
+  /**
+   * Plays a single authentic recorded Kendang drum stroke ('tak' | 'thung' | 'dha')
+   */
+  public playKendangHit(type: 'tak' | 'thung' | 'dha' = 'dha', delay = 0) {
+    if (this.sfxVolume <= 0.01) return;
+    const urlMap = {
+      tak: '/audio/kendang_tak.mp3',
+      thung: '/audio/kendang_thung.mp3',
+      dha: '/audio/kendang_dha.mp3',
+    };
+    this.playRealSample(urlMap[type], {
+      delay,
+      gain: type === 'dha' ? 0.9 : 0.78,
+      fadeOutDur: 0.1,
+    });
+  }
+
+  private playWayangGongSynthFallback() {
+    if (this.sfxVolume <= 0.01) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const scale = Math.max(0.05, this.sfxVolume);
+
+    this.playTone(215, 0.08, 'triangle', 0.16 * scale, 0);
+    this.playTone(132, 0.14, 'sine', 0.2 * scale, 0.09);
+
+    const gongTime = now + 0.16;
+    const gOsc = ctx.createOscillator();
+    gOsc.type = 'sine';
+    gOsc.frequency.setValueAtTime(102, gongTime);
+    gOsc.frequency.exponentialRampToValueAtTime(93, gongTime + 1.6);
+
+    const gHarm = ctx.createOscillator();
+    gHarm.type = 'triangle';
+    gHarm.frequency.setValueAtTime(204, gongTime);
+    gHarm.frequency.exponentialRampToValueAtTime(188, gongTime + 1.2);
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(4.2, gongTime);
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.setValueAtTime(0.09 * scale, gongTime);
+
+    const masterG = ctx.createGain();
+    masterG.gain.setValueAtTime(0.0001, gongTime);
+    masterG.gain.exponentialRampToValueAtTime(0.32 * scale, gongTime + 0.035);
+    masterG.gain.exponentialRampToValueAtTime(0.0001, gongTime + 1.85);
+
+    const harmG = ctx.createGain();
+    harmG.gain.setValueAtTime(0.0001, gongTime);
+    harmG.gain.exponentialRampToValueAtTime(0.11 * scale, gongTime + 0.03);
+    harmG.gain.exponentialRampToValueAtTime(0.0001, gongTime + 1.1);
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(masterG.gain);
+
+    gOsc.connect(masterG);
+    gHarm.connect(harmG);
+    masterG.connect(ctx.destination);
+    harmG.connect(ctx.destination);
+
+    gOsc.start(gongTime);
+    gHarm.start(gongTime);
+    lfo.start(gongTime);
+
+    gOsc.stop(gongTime + 1.9);
+    gHarm.stop(gongTime + 1.15);
+    lfo.stop(gongTime + 1.9);
+  }
+
+  /**
+   * Authentic recorded Kendang ("tak - thung - dha") & Gong Ageng ("Goong!") cue for Pagelaran Wayang Golek
+   */
+  public playWayangGong() {
+    if (this.sfxVolume <= 0.01) return;
+    // Authentic Kendang prelude cadence: tak -> thung -> dha -> Goong resonance
+    this.playKendangHit('tak', 0);
+    this.playKendangHit('thung', 0.11);
+    this.playKendangHit('dha', 0.23);
+    this.playRealSample('/audio/goong.mp3', {
+      delay: 0.35,
+      gain: 0.95,
+      maxDuration: 3.1,
+      fadeOutDur: 0.7,
+      fallback: () => this.playWayangGongSynthFallback(),
     });
   }
 }

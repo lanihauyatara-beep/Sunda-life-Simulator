@@ -125,6 +125,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Hemat baterai: {settings.batterySaver ? 'aktif (30 FPS)' : 'mati (60 FPS, lebih mulus)'}
             </button>
 
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <span className="text-xs font-semibold text-slate-300">Sudut Kamera</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onUpdate({ ...settings, cameraMode: 'third_person' })}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                    (settings.cameraMode ?? 'third_person') === 'third_person'
+                      ? 'bg-amber-400 text-slate-950 border-amber-200'
+                      : 'bg-slate-900 text-slate-200 border-slate-700'
+                  }`}
+                >
+                  3rd-Person
+                </button>
+                <button
+                  onClick={() => onUpdate({ ...settings, cameraMode: 'klasik' })}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                    settings.cameraMode === 'klasik'
+                      ? 'bg-amber-400 text-slate-950 border-amber-200'
+                      : 'bg-slate-900 text-slate-200 border-slate-700'
+                  }`}
+                >
+                  Klasik
+                </button>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-semibold text-slate-300">Bahasa / Basa</span>
               <div className="flex gap-2">

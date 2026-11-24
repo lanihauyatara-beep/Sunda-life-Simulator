@@ -195,31 +195,31 @@ export const WARUNG_RENOVATION_TIERS: WarungRenovationTier[] = [
   {
     level: 1,
     name: 'Warung Kayu Semi-Permanen',
-    slotCount: 12,
+    slotCount: 13,
     cost: 175000,
     recommendedRanks: ['Grandmaster', 'Epic', 'Legend', 'Mythic'],
     rankRequirementLabel: 'Rank Grandmaster+ atau Uang > Rp 175.000',
-    description: 'Menambah rak jajanan tradisional Sunda: Mie Instan, Surabi, Peuyeum & Bajigur (+4 slot).',
-    unlockedItemIds: ['mie_instan', 'surabi', 'peuyeum', 'bajigur'],
+    description: 'Menambah rak jajanan tradisional Sunda: Mie Instan, Surabi, Peuyeum, Bajigur & Cilok Bumbu (+5 slot).',
+    unlockedItemIds: ['mie_instan', 'surabi', 'peuyeum', 'bajigur', 'cilok_bumbu'],
   },
   {
     level: 2,
     name: 'Warung Juragan Grandmaster',
-    slotCount: 17,
+    slotCount: 19,
     cost: 350000,
     recommendedRanks: ['Grandmaster', 'Epic', 'Legend', 'Mythic'],
     rankRequirementLabel: 'Rank Grandmaster+ atau Uang > Rp 350.000',
-    description: 'Etalase kaca & kanopi musiman: Jas Hujan, Payung, Bandrek, Minyak Angin & Es Cendol (+5 slot).',
-    unlockedItemIds: ['jas_hujan', 'payung_lipat', 'bandrek_hangat', 'minyak_angin', 'es_cendol'],
+    description: 'Etalase kaca & kanopi musiman: Jas Hujan, Payung, Bandrek, Minyak Angin, Es Cendol & Colenak (+6 slot).',
+    unlockedItemIds: ['jas_hujan', 'payung_lipat', 'bandrek_hangat', 'minyak_angin', 'es_cendol', 'colenak_bandung'],
   },
   {
     level: 3,
     name: 'Toko Kelontong Legend Priangan',
-    slotCount: 22,
+    slotCount: 24,
     cost: 600000,
     recommendedRanks: ['Legend', 'Mythic'],
     rankRequirementLabel: 'Rank Legend+ atau Uang > Rp 600.000',
-    description: 'Warung termegah di Sukamaju! Membuka seluruh 22 barang termasuk Caping & Hasil Alam segar (+5 slot).',
+    description: 'Warung termegah di Sukamaju! Membuka seluruh 24 barang termasuk Caping & Hasil Alam segar (+5 slot).',
     unlockedItemIds: ['caping_bambu', 'ikan_mas', 'ikan_dewa', 'buah_kebun', 'herbal_hutan'],
   },
 ];
@@ -398,6 +398,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   batterySaver: false,
   language: 'id',
   rogAllyMode: true,
+  cameraMode: 'third_person',
 };
 
 export function formatRupiah(amount: number): string {
@@ -463,6 +464,13 @@ const DAILY_MISSION_TEMPLATES: Record<
     rewardPoints: 18,
     rewardMoney: 10000,
   },
+  cultural_stage: {
+    id: 'cultural_stage',
+    label: 'Ikuti Pentas Angklung / Wayang Golek',
+    target: 1,
+    rewardPoints: 25,
+    rewardMoney: 20000,
+  },
 };
 
 export const DAILY_MISSION_GRAND_BONUS = {
@@ -471,12 +479,12 @@ export const DAILY_MISSION_GRAND_BONUS = {
 };
 
 export function generateDailyMissions(day: number): DailyMissionsState {
-  // Day 1 & even rotation always feature the core trio; other days rotate cleanly with 3 varied tasks
+  // Day 1 & rotating days mix village social, warung trade, nature, and Sunda cultural stage
   const pools: DailyMissionTaskId[][] = [
     ['greet_warga', 'sell_items', 'forage_herbal'],
-    ['greet_warga', 'sell_items', 'catch_fish'],
-    ['greet_warga', 'forage_herbal', 'side_job'],
-    ['sell_items', 'forage_herbal', 'pray_jamaah'],
+    ['greet_warga', 'sell_items', 'cultural_stage'],
+    ['greet_warga', 'catch_fish', 'side_job'],
+    ['sell_items', 'cultural_stage', 'pray_jamaah'],
   ];
   const chosenIds = pools[(Math.max(1, day) - 1) % pools.length];
   return {
@@ -1087,6 +1095,27 @@ export const ITEMS: ItemDef[] = [
     description: 'Topi anyaman bambu pelindung terik matahari di sawah dan jalan.',
     emojiIcon: '👒',
   },
+  {
+    id: 'cilok_bumbu',
+    name: 'Cilok Bumbu Kacang',
+    sundaName: 'Aci Dicolok Suuk',
+    category: 'warung',
+    wholesalePrice: 2000,
+    retailPrice: 4000,
+    description: 'Aci kenyal hangat disiram sambal kacang kencur favorit anak & warga.',
+    emojiIcon: '🍡',
+  },
+  {
+    id: 'colenak_bandung',
+    name: 'Colenak Tape Bakar',
+    sundaName: 'Peuyeum Dibakar Kinca',
+    category: 'warung',
+    seasonTag: 'hujan',
+    wholesalePrice: 3500,
+    retailPrice: 6500,
+    description: 'Tape singkong bakar hangat dengan siraman gula aren & parutan kelapa.',
+    emojiIcon: '🍯',
+  },
   // Menu Warung Asih (Warung Ngopi & Makan Sunda untuk memulihkan energi Arga)
   {
     id: 'ngopi_tubruk',
@@ -1144,6 +1173,30 @@ export const ITEMS: ItemDef[] = [
     energyRestore: 45,
     description: 'Sayuran segar bumbu kacang kencur dengan tahu goreng renyah & kerupuk.',
     emojiIcon: '🥗',
+  },
+  {
+    id: 'seblak_ceker',
+    name: 'Seblak Kerupuk Pedas',
+    sundaName: 'Seblak Cikur Lada',
+    category: 'ngopi',
+    seasonTag: 'hujan',
+    wholesalePrice: 0,
+    retailPrice: 10000,
+    energyRestore: 40,
+    description: 'Seblak kuah kencur pedas hangat dengan kerupuk aci dan bakso khas Bandung.',
+    emojiIcon: '🍲',
+  },
+  {
+    id: 'karedok_segar',
+    name: 'Karedok Leunca Segar',
+    sundaName: 'Karedok Sunda',
+    category: 'ngopi',
+    seasonTag: 'kemarau',
+    wholesalePrice: 0,
+    retailPrice: 11000,
+    energyRestore: 42,
+    description: 'Lalapan mentah renyah leunca & terong bulat berbalut sambal kacang terasi wangi.',
+    emojiIcon: '🥬',
   },
   // Hasil alam (mancing, kebun, hutan) yang bisa dijual di warung/pasar
   {
@@ -1723,6 +1776,14 @@ export const SCENES: Record<SceneId, SceneDef> = {
         x: 66,
         y: 46,
         actionType: 'tradition_board',
+      },
+      {
+        id: 'pentas_budaya_sunda',
+        label: 'Pentas Angklung & Wayang Golek',
+        subtitle: 'Main Angklung Da-Mi-Na-Ti-La & Lakon Cepot',
+        x: 46,
+        y: 52,
+        actionType: 'cultural_stage',
       },
     ],
     neighbors: [
@@ -2779,6 +2840,24 @@ export const SIDE_JOBS: SideJobDef[] = [
       'Catat laporan keamanan di buku Pos Ronda',
     ],
   },
+  {
+    id: 'latihan_angklung',
+    title: 'Latihan Angklung & Panggung Wayang',
+    locationLabel: 'Bale Patemon & Bumi Ageung',
+    scene: 'bumi_ageung',
+    period: 'malam',
+    startHour: 17,
+    endHour: 21,
+    reward: 42000,
+    energyCost: 13,
+    durationMinutes: 45,
+    description: 'Menyiapkan gebog pisang wayang golek dan menyetem bilah bambu angklung di Bale Patemon.',
+    steps: [
+      'Tata batang pisang (gebog) & nyalakan lampu blencong panggung',
+      'Susun 1 set angklung Da-Mi-Na-Ti-La di rak bambu',
+      'Bersihkan kotak kayu wayang Cepot, Semar & Gatotkaca',
+    ],
+  },
 ];
 
 export const TRADITIONS: TraditionDef[] = [
@@ -2801,6 +2880,16 @@ export const TRADITIONS: TraditionDef[] = [
     urunanAmount: 30000,
     reputationGain: 0.18,
     hostNpc: 'Ceu Imas',
+  },
+  {
+    id: 'Wayang Golek',
+    dayTrigger: 5,
+    title: 'Pagelaran Wayang Golek Semalam Suntuk',
+    description:
+      'Warga berkumpul di halaman Bumi Ageung menyaksikan dalang memainkan lakon Si Cepot & Semar penuh petuah Sunda.',
+    urunanAmount: 40000,
+    reputationGain: 0.24,
+    hostNpc: 'Mang Ujang',
   },
   {
     id: 'Sawer',
@@ -2831,6 +2920,16 @@ export const TRADITIONS: TraditionDef[] = [
     urunanAmount: 45000,
     reputationGain: 0.25,
     hostNpc: 'Aki Jaya',
+  },
+  {
+    id: 'Angklung Saung',
+    dayTrigger: 11,
+    title: 'Kirab & Konser Angklung Priangan',
+    description:
+      'Anak-anak SD Sukamaju dan pemuda kampung memainkan harmoni angklung bambu mengiringi lagu Manuk Dadali.',
+    urunanAmount: 35000,
+    reputationGain: 0.22,
+    hostNpc: 'Teh Nenden',
   },
   {
     id: 'Seren Taun',
@@ -2945,6 +3044,8 @@ export function createInitialGameState(slotId = 1): GameState {
       minyak_angin: 2,
       es_cendol: 4,
       caping_bambu: 2,
+      cilok_bumbu: 4,
+      colenak_bandung: 3,
     },
     customPrices: defaultPrices,
     prayedToday: ['Subuh'],

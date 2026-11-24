@@ -85,6 +85,9 @@ interface GameWorldCanvasProps {
   moveVecRef: React.MutableRefObject<{ x: number; y: number }>;
   isPaused: boolean;
   batterySaver?: boolean;
+  graphicsQuality?: 'rendah' | 'sedang' | 'tinggi';
+  cameraMode?: 'third_person' | 'klasik';
+  argaGesture?: 'none' | 'wave' | 'salute' | 'nod';
   onUpdatePlayerPos: (pos: { x: number; y: number }, facing: 'left' | 'right') => void;
   onTriggerHotspot: (hotspot: Hotspot) => void;
   onTalkNpc: (npc: NpcDef) => void;
@@ -246,6 +249,9 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
   moveVecRef,
   isPaused,
   batterySaver = false,
+  graphicsQuality = 'sedang',
+  cameraMode = 'third_person',
+  argaGesture = 'none',
   onUpdatePlayerPos,
   onTriggerHotspot,
   onTalkNpc,
@@ -254,10 +260,15 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
   onNearestActionChange,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const worldStageRef = useRef<HTMLDivElement | null>(null);
   const posRef = useRef(playerPos);
   const facingRef = useRef(facing);
   const [renderPos, setRenderPos] = useState(playerPos);
   const [renderFacing, setRenderFacing] = useState(facing);
+  const [argaView, setArgaView] = useState<'back' | 'back_left' | 'back_right'>('back');
+  const argaViewRef = useRef<'back' | 'back_left' | 'back_right'>('back');
+  const cameraPosRef = useRef(playerPos);
+  const [renderCamPos, setRenderCamPos] = useState(playerPos);
   const [isMoving, setIsMoving] = useState(false);
 
   const vehiclesRef = useRef<MovingVehicle[]>([]);
@@ -356,8 +367,12 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
       lastSceneIdRef.current = scene.id;
       posRef.current = playerPos;
       facingRef.current = facing;
+      cameraPosRef.current = playerPos;
+      argaViewRef.current = 'back';
       setRenderPos(playerPos);
+      setRenderCamPos(playerPos);
       setRenderFacing(facing);
+      setArgaView('back');
       clickTargetRef.current = null;
       setClickTarget(null);
       stuckFramesRef.current = 0;
@@ -491,12 +506,16 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
 
           const movedDist = Math.hypot(nextX - posRef.current.x, nextY - posRef.current.y);
           const nextFacing = nx < -0.1 ? 'left' : nx > 0.1 ? 'right' : facingRef.current;
+          const nextView: 'back' | 'back_left' | 'back_right' =
+            nx < -0.22 ? 'back_left' : nx > 0.22 ? 'back_right' : 'back';
 
           if (movedDist > 0.005) {
             posRef.current = { x: nextX, y: nextY };
             facingRef.current = nextFacing;
+            argaViewRef.current = nextView;
             setRenderPos(posRef.current);
             setRenderFacing(nextFacing);
+            setArgaView(nextView);
             setIsMoving(true);
             stuckFramesRef.current = 0;
 
@@ -506,7 +525,9 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
             }
           } else {
             facingRef.current = nextFacing;
+            argaViewRef.current = nextView;
             setRenderFacing(nextFacing);
+            setArgaView(nextView);
             setIsMoving((prev) => (prev ? false : prev));
             if (usingClickWalk) {
               stuckFramesRef.current += 1;
@@ -518,7 +539,23 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
             }
           }
         } else {
+          if (argaViewRef.current !== 'back') {
+            argaViewRef.current = 'back';
+            setArgaView('back');
+          }
           setIsMoving((prev) => (prev ? false : prev));
+        }
+
+        // Smooth third-person follow camera spring lerp
+        const camLerp = 1 - Math.exp(-8 * dt);
+        const camDx = posRef.current.x - cameraPosRef.current.x;
+        const camDy = posRef.current.y - cameraPosRef.current.y;
+        if (Math.hypot(camDx, camDy) > 0.015) {
+          cameraPosRef.current = {
+            x: cameraPosRef.current.x + camDx * camLerp,
+            y: cameraPosRef.current.y + camDy * camLerp,
+          };
+          setRenderCamPos(cameraPosRef.current);
         }
 
         // 2. Road-following vehicles with natural calm gaps & collision detection
@@ -833,9 +870,49 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
     operatingRoadVehicles.length > 0 &&
     distancePointToRoad(renderPos.x, renderPos.y, scene.roadPath.points) < 9.5;
 
+  // Golden hour & mountain morning mist atmospheric factors
+  const isMorningGoldenHour = !scene.isIndoor && hour >= 5.75 && hour < 8.15;
+  const isEveningGoldenHour = !scene.isIndoor && hour >= 16.0 && hour < 17.85;
+  const goldenHourOpacity =
+    weather === 'hujan'
+      ? 0
+      : weather === 'mendung' || weather === 'gerimis'
+      ? isMorningGoldenHour || isEveningGoldenHour
+        ? 0.28
+        : 0
+      : isMorningGoldenHour || isEveningGoldenHour
+      ? 0.85
+      : 0;
+
+  const morningMistOpacity =
+    !scene.isIndoor && hour >= 4.75 && hour <= 8.25
+      ? weather === 'terik'
+        ? 0.38
+        : 0.72
+      : 0;
+
+  const sunShadowOffset = (() => {
+    if (scene.isIndoor) return { dx: 2, dy: 2.2, opacity: 0.26 };
+    if (isNightTime) return { dx: 0, dy: 2.4, opacity: 0.24 };
+    if (hour < 9.5) return { dx: -7, dy: 3.2, opacity: weather === 'hujan' ? 0.2 : 0.4 };
+    if (hour < 14.5) return { dx: 1.5, dy: 2.2, opacity: weather === 'hujan' ? 0.22 : 0.44 };
+    return { dx: 7.5, dy: 3.4, opacity: weather === 'hujan' ? 0.2 : 0.42 };
+  })();
+
+  const showWetReflections =
+    !scene.isIndoor &&
+    graphicsQuality !== 'rendah' &&
+    (weather === 'hujan' ||
+      weather === 'gerimis' ||
+      scene.id === 'area_air' ||
+      scene.id === 'sawah_lisung');
+
+  const enableDof = !batterySaver && graphicsQuality !== 'rendah';
+
   const handleStageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
+    const targetEl = worldStageRef.current ?? containerRef.current;
+    if (!targetEl) return;
+    const rect = targetEl.getBoundingClientRect();
     const px = ((e.clientX - rect.left) / rect.width) * 100;
     const py = ((e.clientY - rect.top) / rect.height) * 100;
     const target = {
@@ -866,6 +943,16 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
 
   const rect = containerRef.current?.getBoundingClientRect();
   const currentAspect = rect && rect.height > 0 ? rect.width / rect.height : 16 / 9;
+  const isCompactViewport = (rect?.width ?? 1024) < 760 || (rect?.height ?? 768) < 540;
+  const camZoom = cameraMode === 'third_person' ? (isCompactViewport ? 1.34 : 1.48) : 1;
+  const camTx =
+    camZoom > 1
+      ? Math.max(100 * (1 - camZoom), Math.min(0, 50 - renderCamPos.x * camZoom))
+      : 0;
+  const camTy =
+    camZoom > 1
+      ? Math.max(100 * (1 - camZoom), Math.min(0, 66 - renderCamPos.y * camZoom))
+      : 0;
 
   return (
     <div
@@ -873,23 +960,80 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
       onClick={handleStageClick}
       className="relative isolate z-0 w-full h-full overflow-hidden bg-slate-950 cursor-crosshair select-none"
     >
-      {/* Background Isometric Diorama with smooth brightness/saturation transitions */}
-      <img
-        src={scene.bgImage}
-        alt={scene.name}
-        referrerPolicy="no-referrer"
-        style={{
-          objectPosition: scene.bgPosition ?? '50% 50%',
-          filter: `brightness(${backdropBrightness}) saturate(${backdropSaturate})`,
-        }}
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-[filter] duration-[1800ms] ease-in-out"
-      />
-
-      {/* Time-of-Day Base Atmospheric Tint Layer */}
+      {/* Third-Person Follow World Stage (pans & zooms smoothly behind Arga; clamped to edges) */}
       <div
-        style={timeTintStyle}
-        className="absolute inset-0 pointer-events-none transition-all duration-[1800ms] ease-in-out"
-      />
+        ref={worldStageRef}
+        style={{
+          transform: `translate3d(${camTx}%, ${camTy}%, 0) scale(${camZoom})`,
+          transformOrigin: '0 0',
+        }}
+        className="absolute inset-0 w-full h-full will-change-transform"
+      >
+        {/* Background Diorama with filmic contrast & smooth brightness/saturation transitions */}
+        <img
+          src={scene.bgImage}
+          alt={scene.name}
+          referrerPolicy="no-referrer"
+          style={{
+            objectPosition: scene.bgPosition ?? '50% 50%',
+            filter: `brightness(${backdropBrightness}) saturate(${backdropSaturate}) contrast(1.06)`,
+          }}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-[filter] duration-[1800ms] ease-in-out"
+        />
+
+        {/* Time-of-Day Base Atmospheric Tint Layer */}
+        <div
+          style={timeTintStyle}
+          className="absolute inset-0 pointer-events-none transition-all duration-[1800ms] ease-in-out"
+        />
+
+        {/* Golden Hour Directional Rays & Warm Glow (05.45-08.10 & 16.00-17.50 WIB) */}
+        <div
+          aria-hidden="true"
+          style={{ opacity: goldenHourOpacity }}
+          className="absolute inset-0 pointer-events-none transition-opacity duration-[1800ms] ease-in-out"
+        >
+          <div
+            style={{
+              background: isMorningGoldenHour
+                ? 'linear-gradient(125deg, rgba(254,240,138,0.34) 0%, rgba(251,191,36,0.14) 36%, rgba(245,158,11,0.04) 68%, transparent 100%)'
+                : 'linear-gradient(235deg, rgba(251,146,60,0.36) 0%, rgba(245,158,11,0.18) 38%, rgba(180,83,9,0.06) 72%, transparent 100%)',
+            }}
+            className="absolute inset-0 mix-blend-screen"
+          />
+          <div
+            style={{
+              background: isMorningGoldenHour
+                ? 'radial-gradient(circle at 14% 12%, rgba(254,249,195,0.42) 0%, rgba(251,191,36,0.12) 40%, transparent 72%)'
+                : 'radial-gradient(circle at 86% 16%, rgba(253,186,116,0.44) 0%, rgba(245,158,11,0.14) 42%, transparent 74%)',
+            }}
+            className="absolute inset-0 mix-blend-screen"
+          />
+        </div>
+
+        {/* Kabut Pagi Pegunungan Priangan (04.45-08.15 WIB) */}
+        <div
+          aria-hidden="true"
+          style={{ opacity: morningMistOpacity }}
+          className="absolute inset-0 pointer-events-none overflow-hidden transition-opacity duration-[2200ms] ease-in-out"
+        >
+          <div
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(226,232,240,0.22) 0%, rgba(241,245,249,0.12) 45%, rgba(203,213,225,0.18) 100%)',
+            }}
+            className="absolute inset-0"
+          />
+          {!batterySaver && (
+            <div
+              style={{
+                background:
+                  'radial-gradient(ellipse 68% 36% at 28% 28%, rgba(248,250,252,0.3) 0%, transparent 70%), radial-gradient(ellipse 62% 32% at 75% 36%, rgba(226,232,240,0.24) 0%, transparent 72%)',
+              }}
+              className="absolute -inset-8 sunda-morning-mist"
+            />
+          )}
+        </div>
 
       {/* Sunny / Terik Warm Sunbeam Overlay (fades smoothly in/out via opacity) */}
       <div
@@ -993,7 +1137,17 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         />
       )}
 
-      {/* Village Street & House Lamps (Automatically illuminate starting 18.30 WIB until dawn) */}
+      {/* Simulated SSAO (Screen-Space Ambient Occlusion) depth crevices & horizon contact */}
+      <div
+        aria-hidden="true"
+        style={{
+          background:
+            'radial-gradient(ellipse 88% 72% at 50% 52%, transparent 56%, rgba(2,6,23,0.3) 100%), linear-gradient(180deg, rgba(2,6,23,0.22) 0%, transparent 18%, transparent 84%, rgba(2,6,23,0.26) 100%)',
+        }}
+        className="absolute inset-0 pointer-events-none mix-blend-multiply"
+      />
+
+      {/* Village Street & House Lamps + Bloom Halo (Automatically illuminate starting 18.30 WIB until dawn) */}
       {lightPoints.length > 0 && (
         <div
           style={{ opacity: lightsOpacity }}
@@ -1008,11 +1162,20 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
                 width: `${lp.radius * 2}px`,
                 height: `${lp.radius * 2}px`,
                 background:
-                  'radial-gradient(circle, rgba(253,224,71,0.52) 0%, rgba(245,158,11,0.22) 38%, rgba(217,119,6,0) 72%)',
+                  'radial-gradient(circle, rgba(254,240,138,0.58) 0%, rgba(245,158,11,0.26) 38%, rgba(217,119,6,0) 74%)',
               }}
               className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full mix-blend-screen"
             >
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-amber-200 shadow-[0_0_14px_4px_rgba(251,191,36,0.95)]" />
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-amber-100 shadow-[0_0_22px_8px_rgba(251,191,36,0.95)]" />
+              {showWetReflections && (
+                <div
+                  style={{
+                    background:
+                      'radial-gradient(ellipse at center, rgba(251,191,36,0.32) 0%, rgba(245,158,11,0) 72%)',
+                  }}
+                  className="absolute left-1/2 top-[76%] -translate-x-1/2 w-16 h-10 rounded-full blur-[3px]"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -1060,31 +1223,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         </div>
       )}
 
-      {/* Road Warning indicator when Arga is close to active traffic */}
-      {!isPaused && nearRoad && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 rounded-lg bg-amber-950/90 border border-amber-400 text-amber-200 text-xs font-bold flex items-center gap-2 shadow-lg pointer-events-none">
-          <AlertTriangle className="w-4 h-4 text-amber-400" />
-          <span>
-            Hati-hati menyeberang! Waspada{' '}
-            {operatingRoadVehicles
-              .map((vt) =>
-                vt === 'angkot'
-                  ? 'Angkot'
-                  : vt === 'motor'
-                  ? 'Motor'
-                  : vt === 'mobil'
-                  ? 'Mobil'
-                  : vt === 'delman'
-                  ? 'Delman'
-                  : vt === 'becak'
-                  ? 'Becak'
-                  : 'Pedati'
-              )
-              .join(', ')}
-            .
-          </span>
-        </div>
-      )}
+      {/* Rain streaks stay inside world stage */}
 
       {/* Scene Hotspots (Interactive Buildings & Activities — name/description appear only when Arga approaches) */}
       {!isPaused && scene.hotspots.map((hs) => {
@@ -1147,33 +1286,9 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         );
       })}
 
-      {/* Neighbor Zone Navigation Arrows */}
-      {!isPaused && scene.neighbors.map((nb) => {
-        const posClass =
-          nb.direction === 'Kiri'
-            ? 'left-2 sm:left-4 top-1/2 -translate-y-1/2'
-            : nb.direction === 'Kanan'
-            ? 'right-2 sm:right-4 top-1/2 -translate-y-1/2'
-            : nb.direction === 'Atas'
-            ? 'top-14 sm:top-24 left-1/2 -translate-x-1/2'
-            : 'bottom-14 sm:bottom-20 left-1/2 -translate-x-1/2';
+      {/* Neighbor Zone Arrows moved outside scaled world stage to stay anchored on viewport edges */}
 
-        return (
-          <button
-            key={nb.scene}
-            onClick={(e) => {
-              e.stopPropagation();
-              onChangeScene(nb.scene);
-            }}
-            className={`absolute ${posClass} z-20 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-950/85 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/70 text-[11px] sm:text-xs font-bold flex items-center gap-1.5 shadow-xl transition-colors`}
-          >
-            <Navigation className="w-3.5 h-3.5" />
-            <span>{nb.label}</span>
-          </button>
-        );
-      })}
-
-      {/* Wandering / Standing Sundanese NPCs */}
+      {/* Wandering / Standing Sundanese NPCs with depth scaling & wet-surface reflections */}
       {npcsInScene.map((npc) => {
         const greeted = greetedNpcsToday.includes(npc.id);
         const isNear = nearestNpc?.id === npc.id;
@@ -1182,6 +1297,7 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
         const ny = live?.y ?? npc.y;
         const npcFacing = live?.facing ?? 'right';
         const npcMoving = !isPaused && Boolean(live?.isMoving);
+        const depthScale = Math.max(0.76, Math.min(1.12, 0.72 + 0.38 * (ny / 100)));
         return (
           <button
             key={npc.id}
@@ -1194,8 +1310,13 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
               e.stopPropagation();
               onTalkNpc(npc);
             }}
-            style={{ left: `${nx}%`, top: `${ny}%`, zIndex: Math.round(ny) }}
-            className="absolute -translate-x-1/2 -translate-y-3/4 group cursor-pointer"
+            style={{
+              left: `${nx}%`,
+              top: `${ny}%`,
+              zIndex: Math.round(ny),
+              transform: `translate(-50%, -76%) scale(${depthScale})`,
+            }}
+            className="absolute group cursor-pointer"
           >
             {!isPaused && (
               <div
@@ -1216,34 +1337,82 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
               accentColor={npc.accentColor}
               hatType={npc.hatType}
               facing={npcFacing}
+              sunShadowOffset={sunShadowOffset}
               moveDir={live?.moveDir}
               motionState={isPaused ? 'idle' : live?.motionState}
               walkCadenceSec={live?.walkCadenceSec}
               isMoving={npcMoving}
             />
+            {showWetReflections && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none opacity-25 blur-[2px] -mt-2 scale-y-[-0.46] origin-top"
+              >
+                <CharacterSprite
+                  name=""
+                  shirtColor={npc.shirtColor}
+                  accentColor={npc.accentColor}
+                  hatType={npc.hatType}
+                  facing={npcFacing}
+                  isMoving={npcMoving}
+                />
+              </div>
+            )}
           </button>
         );
       })}
 
-      {/* Player Character: Arga */}
-      <div
-        style={{ left: `${renderPos.x}%`, top: `${renderPos.y}%`, zIndex: Math.round(renderPos.y) + 1 }}
-        className="absolute -translate-x-1/2 -translate-y-3/4 pointer-events-none"
-      >
-        <CharacterSprite
-          name="Arga"
-          shirtColor="#dc2626"
-          accentColor="#f8fafc"
-          hatType="none"
-          outfitMode={outfitMode}
-          isArga
-          isInjured={isInjured}
-          facing={renderFacing}
-          isMoving={isMoving}
-        />
-      </div>
+      {/* Player Character: Arga (Third-Person behind view in Third-Person mode, classic front view in Klasik mode) */}
+      {(() => {
+        const argaDepthScale = Math.max(0.8, Math.min(1.16, 0.74 + 0.4 * (renderPos.y / 100)));
+        const perspective = cameraMode === 'third_person' ? argaView : 'front';
+        return (
+          <div
+            style={{
+              left: `${renderPos.x}%`,
+              top: `${renderPos.y}%`,
+              zIndex: Math.round(renderPos.y) + 1,
+              transform: `translate(-50%, -76%) scale(${argaDepthScale})`,
+            }}
+            className="absolute pointer-events-none"
+          >
+            <CharacterSprite
+              name="Arga"
+              shirtColor="#dc2626"
+              accentColor="#f8fafc"
+              hatType="none"
+              outfitMode={outfitMode}
+              isArga
+              isInjured={isInjured}
+              facing={renderFacing}
+              viewPerspective={perspective}
+              sunShadowOffset={sunShadowOffset}
+              isMoving={isMoving}
+              gesture={argaGesture}
+            />
+            {showWetReflections && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none opacity-28 blur-[2px] -mt-2 scale-y-[-0.48] origin-top"
+              >
+                <CharacterSprite
+                  name=""
+                  shirtColor="#dc2626"
+                  accentColor="#f8fafc"
+                  hatType="none"
+                  outfitMode={outfitMode}
+                  isArga
+                  facing={renderFacing}
+                  viewPerspective={perspective}
+                  isMoving={isMoving}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
-      {/* Moving Traffic Vehicles aligned strictly to road with wheel anchor, depth scaling & edge fade */}
+      {/* Moving Traffic Vehicles aligned strictly to road with wheel anchor, depth scaling & wet reflections */}
       {vehicles
         .filter((v) => v.progress >= 0.01 && v.progress <= 0.99)
         .map((v) => {
@@ -1269,6 +1438,18 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
                 direction={sampledDir ?? v.direction}
                 angleDeg={v.angleDeg}
               />
+              {showWetReflections && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none opacity-22 blur-[2px] -mt-1 scale-y-[-0.42] origin-top"
+                >
+                  <VehicleSprite
+                    type={v.type}
+                    direction={sampledDir ?? v.direction}
+                    angleDeg={v.angleDeg}
+                  />
+                </div>
+              )}
             </div>
           );
         })}
@@ -1280,6 +1461,93 @@ export const GameWorldCanvas: React.FC<GameWorldCanvasProps> = ({
           className="absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 border-amber-300 bg-amber-400/30 pointer-events-none animate-ping"
         />
       )}
+      </div>
+
+      {/* Screen-Space Depth of Field (DoF): subtle horizon & foreground optical blur keeping mid-ground crisp */}
+      {enableDof && (
+        <>
+          <div
+            aria-hidden="true"
+            style={{
+              WebkitMaskImage: 'linear-gradient(to bottom, black 0%, transparent 100%)',
+              maskImage: 'linear-gradient(to bottom, black 0%, transparent 100%)',
+            }}
+            className="absolute top-0 inset-x-0 h-[22%] backdrop-blur-[1.6px] pointer-events-none z-20"
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              WebkitMaskImage: 'linear-gradient(to top, black 0%, transparent 100%)',
+              maskImage: 'linear-gradient(to top, black 0%, transparent 100%)',
+            }}
+            className="absolute bottom-0 inset-x-0 h-[9%] backdrop-blur-[1.2px] pointer-events-none z-20"
+          />
+        </>
+      )}
+
+      {/* Filmic Color Grade & Subtle Optical Vignette */}
+      <div
+        aria-hidden="true"
+        style={{
+          background:
+            'radial-gradient(ellipse 82% 78% at 50% 50%, rgba(255,244,214,0.03) 45%, rgba(2,6,23,0.34) 100%)',
+        }}
+        className="absolute inset-0 pointer-events-none z-20"
+      />
+
+      {/* Road Warning indicator anchored in screen-space */}
+      {!isPaused && nearRoad && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 rounded-lg bg-amber-950/90 border border-amber-400 text-amber-200 text-xs font-bold flex items-center gap-2 shadow-lg pointer-events-none">
+          <AlertTriangle className="w-4 h-4 text-amber-400" />
+          <span>
+            Hati-hati menyeberang! Waspada{' '}
+            {operatingRoadVehicles
+              .map((vt) =>
+                vt === 'angkot'
+                  ? 'Angkot'
+                  : vt === 'motor'
+                  ? 'Motor'
+                  : vt === 'mobil'
+                  ? 'Mobil'
+                  : vt === 'delman'
+                  ? 'Delman'
+                  : vt === 'becak'
+                  ? 'Becak'
+                  : 'Pedati'
+              )
+              .join(', ')}
+            .
+          </span>
+        </div>
+      )}
+
+      {/* Neighbor Zone Navigation Arrows anchored to screen edges */}
+      {!isPaused && scene.neighbors.map((nb) => {
+        const posClass =
+          nb.direction === 'Kiri'
+            ? 'left-2 sm:left-4 top-1/2 -translate-y-1/2'
+            : nb.direction === 'Kanan'
+            ? 'right-2 sm:right-4 top-1/2 -translate-y-1/2'
+            : nb.direction === 'Atas'
+            ? 'top-14 sm:top-24 left-1/2 -translate-x-1/2'
+            : 'bottom-14 sm:bottom-20 left-1/2 -translate-x-1/2';
+
+        return (
+          <button
+            key={nb.scene}
+            onClick={(e) => {
+              e.stopPropagation();
+              onChangeScene(nb.scene);
+            }}
+            className={`absolute ${posClass} z-25 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-950/85 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/70 text-[11px] sm:text-xs font-bold flex items-center gap-1.5 shadow-xl transition-colors`}
+          >
+            <Navigation className="w-3.5 h-3.5" />
+            <span>{nb.label}</span>
+          </button>
+        );
+      })}
+
+      {/* Camera perspective toggle moved into Pengaturan Game (Settings) */}
 
       {/* Bottom-left Virtual Analog Joystick (Touch / Mouse drag fallback alongside Controller stick) */}
       {!isPaused && (
