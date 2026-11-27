@@ -429,37 +429,80 @@ export const PrayerReminderModal: React.FC<PrayerReminderModalProps> = ({
 
 interface TraditionModalProps {
   tradition: TraditionDef;
+  currentScene: SceneId;
+  day: number;
+  minutesOfDay: number;
   money: number;
   alreadyPaid: boolean;
+  onGoToLocation: (scene: SceneId) => void;
   onPayUrunan: (tradition: TraditionDef) => void;
   onSkip: () => void;
 }
 
 export const TraditionModal: React.FC<TraditionModalProps> = ({
   tradition,
+  currentScene,
+  day,
+  minutesOfDay,
   money,
   alreadyPaid,
+  onGoToLocation,
   onPayUrunan,
   onSkip,
 }) => {
+  const isAtVenue = currentScene === tradition.scene;
+  const cycleDay = ((day - 1) % 12) + 1;
+  const isScheduledDay = cycleDay === tradition.dayTrigger;
+  const isWithinWindow = minutesOfDay >= tradition.startMinutes && minutesOfDay <= tradition.endMinutes;
+  const canAttendNow = isAtVenue && isScheduledDay && isWithinWindow;
+
   useUiGamepadAction((btn) => {
     if (btn !== 'A') return;
     if (alreadyPaid) {
       onSkip();
-    } else if (money >= tradition.urunanAmount) {
+    } else if (!isAtVenue) {
+      onGoToLocation(tradition.scene);
+    } else if (canAttendNow && money >= tradition.urunanAmount) {
       onPayUrunan(tradition);
     }
   });
+
+  const scheduleStatusText = !isScheduledDay
+    ? `Dijadwalkan Hari ke-${tradition.dayTrigger} (${tradition.timeLabel})`
+    : isWithinWindow
+    ? 'Sedang Berlangsung Sekarang'
+    : minutesOfDay < tradition.startMinutes
+    ? `Dimulai nanti pukul ${formatGameTime(tradition.startMinutes)} WIB`
+    : `Waktu acara hari ini sudah selesai (${tradition.timeLabel})`;
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/88 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
       <div className="w-full max-w-lg bg-slate-900 border-2 border-amber-400 rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[94dvh] overflow-y-auto">
         <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider mb-1">
           <Sparkles className="w-4 h-4" />
-          <span>Tradisi Budaya Sunda · Disampaikan {tradition.hostNpc}</span>
+          <span>Acara Warga Sunda · Tuan Rumah {tradition.hostNpc}</span>
         </div>
         <h2 className="font-display text-2xl font-bold text-amber-50 mb-2">{tradition.title}</h2>
         <p className="text-sm text-slate-300 leading-relaxed mb-4">{tradition.description}</p>
+
+        {/* Venue & Realistic Time Window */}
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 mb-3 space-y-2 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-slate-400">Tempat Acara:</span>
+            <span className={`font-bold ${isAtVenue ? 'text-emerald-300' : 'text-amber-200'}`}>
+              {tradition.locationLabel} {isAtVenue ? '(Arga sudah di lokasi)' : '(Belum di lokasi)'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-slate-400">Waktu Acara:</span>
+            <span className={`font-bold ${isScheduledDay && isWithinWindow ? 'text-emerald-300' : 'text-amber-300'}`}>
+              {tradition.timeLabel}
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-300 pt-1 border-t border-slate-800/80">
+            Status: <span className="font-semibold text-amber-100">{scheduleStatusText}</span>
+          </div>
+        </div>
 
         <div className="bg-slate-950 border border-amber-400/40 rounded-xl p-4 mb-5 flex items-center justify-between">
           <div>
@@ -471,7 +514,7 @@ export const TraditionModal: React.FC<TraditionModalProps> = ({
           <div className="text-right text-xs text-emerald-300 font-bold">
             +{tradition.reputationGain.toFixed(2)} Reputasi Warung
             <br />
-            +10% Kepuasan Warga
+            +10% Kepuasan Warga · +35 Poin
           </div>
         </div>
 
@@ -480,8 +523,37 @@ export const TraditionModal: React.FC<TraditionModalProps> = ({
             onClick={onSkip}
             className="w-full py-3 rounded-xl bg-emerald-500 text-slate-950 font-bold text-sm"
           >
-            Urunan Sudah Dibayar · Tutup [B]
+            Arga Sudah Hadir &amp; Urunan · Tutup [B]
           </button>
+        ) : !isAtVenue ? (
+          <div className="flex gap-3">
+            <button
+              onClick={onSkip}
+              className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm"
+            >
+              Nanti [B]
+            </button>
+            <button
+              onClick={() => onGoToLocation(tradition.scene)}
+              className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2"
+            >
+              <MapPin className="w-4 h-4" />
+              <span>Langsung ke {tradition.locationLabel} [A]</span>
+            </button>
+          </div>
+        ) : !canAttendNow ? (
+          <div className="space-y-2.5">
+            <div className="p-2.5 rounded-xl bg-amber-950/50 border border-amber-400/40 text-xs text-amber-200 text-center">
+              Arga sudah berada di tempat acara, namun acara hanya dilaksanakan pada{' '}
+              <strong>Hari ke-{tradition.dayTrigger} pukul {tradition.timeLabel}</strong>.
+            </div>
+            <button
+              onClick={onSkip}
+              className="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm"
+            >
+              Mengerti · Tutup [B]
+            </button>
+          </div>
         ) : (
           <div className="flex gap-3">
             <button
@@ -497,7 +569,7 @@ export const TraditionModal: React.FC<TraditionModalProps> = ({
             >
               {money < tradition.urunanAmount
                 ? 'Uang Belum Cukup'
-                : `Bayar Urunan ${formatRupiah(tradition.urunanAmount)} [A]`}
+                : `Ikuti Acara & Urunan ${formatRupiah(tradition.urunanAmount)} [A]`}
             </button>
           </div>
         )}
@@ -1196,24 +1268,27 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({
 
               <div className="bg-slate-950 border border-amber-400/40 rounded-xl p-3.5">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-amber-300">Kalender Tradisi Sunda</span>
+                  <span className="text-xs font-bold text-amber-300">Kalender Acara &amp; Tradisi Sunda</span>
                   <button
                     onClick={onOpenTraditions}
                     className="text-xs font-bold text-amber-200 underline"
                   >
-                    Cek Urunan
+                    Cek &amp; Hadiri Acara
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {TRADITIONS.map((t) => {
                     const paid = gameState.paidTraditions.some(
                       (entry) => entry === t.id || entry.startsWith(`${t.id}_`)
                     );
                     return (
-                      <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs">
+                      <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs">
                         <div className="font-bold text-amber-100">{t.id}</div>
                         <div className="text-[11px] text-slate-400">
-                          Hari ke-{t.dayTrigger} · Urunan {formatRupiah(t.urunanAmount)}
+                          Hari ke-{t.dayTrigger} · {t.timeLabel}
+                        </div>
+                        <div className="text-[10px] text-sky-300">
+                          Tempat: {t.locationLabel} · Urunan {formatRupiah(t.urunanAmount)}
                         </div>
                         <div className={`text-[10px] font-bold mt-0.5 ${paid ? 'text-emerald-400' : 'text-amber-300'}`}>
                           {paid ? 'Sudah Berpartisipasi' : 'Menunggu Jadwal'}
@@ -1367,7 +1442,10 @@ export const ChangelogAndGuideModal: React.FC<{ onClose: () => void }> = ({ onCl
                 • <strong>🌄 Visual Sinematik Realistis:</strong> Pencahayaan <strong>Golden Hour</strong> pagi/sore, <strong>kabut pagi pegunungan</strong>, warna film, bayangan lembut terarah, simulasi <strong>SSAO &amp; Glow</strong>, pantulan genangan air hujan, serta efek <strong>Depth of Field</strong>.
               </li>
               <li>
-                • <strong>🎶 Budaya &amp; Kuliner Sunda Baru:</strong> Mainkan <strong>Angklung (Da-Mi-Na-Ti-La)</strong> dan saksikan <strong>Wayang Golek Si Cepot &amp; Semar</strong> di Bumi Ageung, kerja sampingan <strong>Latihan Angklung</strong>, plus kuliner <strong>Seblak Ceker, Karedok, Cilok, Colenak</strong> &amp; <strong>Tutug Oncom</strong>!
+                • <strong>🎶 Budaya &amp; Kuliner Sunda Baru:</strong> Mainkan <strong>Angklung (Da-Mi-Na-Ti-La, 07.00–18.30)</strong> dan saksikan <strong>Wayang Golek Si Cepot &amp; Semar (malam hari 18.30–23.59 WIB)</strong> langsung di Bumi Ageung, kerja sampingan <strong>Latihan Angklung</strong>, plus kuliner <strong>Seblak Ceker, Karedok, Cilok, Colenak</strong> &amp; <strong>Tutug Oncom</strong>!
+              </li>
+              <li>
+                • <strong>🎲 Arena Permainan Tradisional (Kaulinan Sunda):</strong> Ikuti permainan <strong>Congklak</strong>, <strong>Egrang Bambu</strong>, dan <strong>Sondah (Engklek)</strong> langsung di arena Lapangan SD Sukamaju / Kompleks Warga untuk meraih tambahan <strong>Poin Keaktifan</strong> &amp; uang saku!
               </li>
               <li>
                 • <strong>🖥️ Pilihan Layar Fullscreen / Tidak saat Mulai:</strong> Saat mulai bermain atau memuat slot, pemain bisa langsung memilih mode <strong>Fullscreen (Layar Penuh)</strong> atau <strong>Mode Biasa</strong> (plus tombol ubah layar penuh di HUD).
@@ -1404,7 +1482,7 @@ export const ChangelogAndGuideModal: React.FC<{ onClose: () => void }> = ({ onCl
           </div>
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
             <span className="inline-block px-2 py-0.5 rounded bg-rose-400 text-slate-950 font-bold mr-2">TRADISI, HP &amp; CONTROLLER</span>
-            Bayar urunan tradisi Sunda (Seren Taun, Ngalaksa, Ngaruwat Bumi, Tingkeban, Sawer, Botram), pantau <strong>10 transaksi terakhir</strong> &amp; <strong>prakiraan cuaca 3 hari</strong> di HP <strong>[X]</strong>, serta mainkan pakai sentuh, keyboard, atau <strong>Controller</strong>!
+            Datang langsung ke tempat acara warga sesuai jadwalnya (seperti <strong>Wayang Golek malam hari 19.00–23.30</strong>, Botram siang, Ngalaksa pagi) untuk ikut urunan &amp; meramaikan, pantau <strong>10 transaksi terakhir</strong> &amp; <strong>prakiraan cuaca 3 hari</strong> di HP <strong>[X]</strong>, serta mainkan pakai sentuh, keyboard, atau <strong>Controller</strong>!
           </div>
         </div>
 

@@ -86,7 +86,8 @@ export type ActiveModal =
   | 'ACCIDENT'
   | 'TUTORIAL'
   | 'HUTANG_BUKU'
-  | 'DISPLAY_MODE';
+  | 'DISPLAY_MODE'
+  | 'TRADITIONAL_GAMES';
 
 export interface GameSettings {
   musicVolume: number;
@@ -132,7 +133,8 @@ export interface Hotspot {
     | 'forage_hutan'
     | 'clean_air'
     | 'tradition_board'
-    | 'cultural_stage';
+    | 'cultural_stage'
+    | 'traditional_games';
   targetScene?: SceneId;
   targetSpawn?: { x: number; y: number };
   subtitle?: string;
@@ -229,12 +231,17 @@ export interface SideJobDef {
 
 export interface TraditionDef {
   id: TraditionName;
-  dayTrigger: number; // day % 14 or specific day
+  dayTrigger: number; // day % 12 (1..12)
   title: string;
   description: string;
   urunanAmount: number;
   reputationGain: number;
   hostNpc: string;
+  scene: SceneId;
+  locationLabel: string;
+  startMinutes: number;
+  endMinutes: number;
+  timeLabel: string;
 }
 
 export interface CustomerOrder {
@@ -297,7 +304,8 @@ export type DailyMissionTaskId =
   | 'catch_fish'
   | 'side_job'
   | 'pray_jamaah'
-  | 'cultural_stage';
+  | 'cultural_stage'
+  | 'traditional_games';
 
 export interface DailyMissionTask {
   id: DailyMissionTaskId;

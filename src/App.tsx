@@ -17,6 +17,8 @@ import {
   Gift,
   Maximize2,
   Minimize2,
+  Dices,
+  MapPin,
 } from 'lucide-react';
 import {
   ASSETS,
@@ -87,12 +89,23 @@ import {
   TraditionModal,
 } from './components/ModalsAndOverlays';
 import { CulturalStageModal } from './components/CulturalStageModal';
+import { KaulinanModal, KaulinanRewardPayload } from './components/KaulinanModal';
 import { LandscapeOrientationGuard, OfflineNoticePill } from './components/PWAAndOrientationUI';
 
 const SLOT_STORAGE_PREFIX = 'sunda_life_sim_slot_';
 const ACTIVE_SLOT_STORAGE_KEY = 'sunda_life_sim_active_slot';
 const SETTINGS_STORAGE_KEY = 'sunda_life_sim_settings';
 const ACCESS_CODE_STORAGE_KEY = 'sunda_life_sim_access_granted';
+
+function resolveFeaturedTradition(day: number, paidTraditions: string[]): TraditionDef {
+  const cycleDay = ((day - 1) % 12) + 1;
+  const todayTrad = TRADITIONS.find((t) => t.dayTrigger === cycleDay);
+  if (todayTrad) return todayTrad;
+  return (
+    TRADITIONS.find((t) => !paidTraditions.includes(`${t.id}_d${day}`)) ??
+    TRADITIONS[0]
+  );
+}
 
 function loadSettings(): GameSettings {
   try {
@@ -357,7 +370,11 @@ export default function App() {
   }, []);
 
   const transitionToScene = useCallback(
-    (applyFn: () => void, sfx: 'door' | 'click' | 'none' = 'click') => {
+    (
+      applyFn: () => void,
+      sfx: 'door' | 'click' | 'none' = 'click',
+      onAfterTransition?: () => void
+    ) => {
       if (isTransitioningRef.current) return;
       isTransitioningRef.current = true;
       fadeTimersRef.current.forEach((id) => window.clearTimeout(id));
@@ -371,6 +388,7 @@ export default function App() {
         applyFn();
         const t2 = window.setTimeout(() => {
           setSceneFadeOpacity(0);
+          onAfterTransition?.();
           const t3 = window.setTimeout(() => {
             isTransitioningRef.current = false;
           }, 320);
@@ -561,16 +579,20 @@ export default function App() {
         }
       }
 
-      // Tradition Day Check (triggered morning 08:15–11:00 on tradition day)
+      // Tradition Day Check (triggered at realistic event window for that tradition)
       const matchingTradition = TRADITIONS.find(
         (t) => t.dayTrigger === ((nextDay - 1) % 12) + 1 && !advanced.paidTraditions.includes(`${t.id}_d${nextDay}`)
       );
+      const isInTraditionWindow = Boolean(
+        matchingTradition &&
+          nextMin >= matchingTradition.startMinutes &&
+          nextMin <= matchingTradition.endMinutes
+      );
       const shouldOpenTradition =
         !triggeredPrayer &&
-        matchingTradition &&
-        nextMin >= 8 * 60 + 15 &&
-        nextMin <= 11 * 60 &&
-        advanced.activeTradition !== matchingTradition.id;
+        Boolean(matchingTradition) &&
+        isInTraditionWindow &&
+        advanced.activeTradition !== matchingTradition?.id;
 
       setGameState((curr) => {
         const synced = advanceClockState(curr, 1).next;
@@ -579,7 +601,8 @@ export default function App() {
           warungOpen,
           warungCloseReason: closeReason,
           remindedPrayersToday: nextReminded,
-          activeTradition: matchingTradition ? matchingTradition.id : synced.activeTradition,
+          activeTradition:
+            shouldOpenTradition && matchingTradition ? matchingTradition.id : synced.activeTradition,
           season: advanced.season,
           weather: advanced.weather,
           weatherRemainingMin: advanced.weatherRemainingMin,
@@ -721,7 +744,11 @@ export default function App() {
   }, [saveGameToSlot]);
 
   const handleChangeScene = useCallback(
-    (target: SceneId, customSpawn?: { x: number; y: number }) => {
+    (target: SceneId, customSpawn?: { x: number; y: number }, onArrived?: () => void) => {
+      if (gameStateRef.current.scene === target && !customSpawn) {
+        onArrived?.();
+        return;
+      }
       const sc = SCENES[target];
       transitionToScene(
         () => {
@@ -734,7 +761,8 @@ export default function App() {
             };
           });
         },
-        sc.isIndoor ? 'door' : 'click'
+        sc.isIndoor ? 'door' : 'click',
+        onArrived
       );
     },
     [transitionToScene]
@@ -767,9 +795,12 @@ export default function App() {
         setActiveModal('CULTURAL_STAGE');
         return;
       }
+      if (hs.actionType === 'traditional_games') {
+        setActiveModal('TRADITIONAL_GAMES');
+        return;
+      }
       if (hs.actionType === 'tradition_board') {
-        const nextTrad =
-          TRADITIONS.find((t) => !gameState.paidTraditions.includes(`${t.id}_d${gameState.day}`)) ?? TRADITIONS[0];
+        const nextTrad = resolveFeaturedTradition(gameState.day, gameState.paidTraditions);
         setActiveTradition(nextTrad);
         setActiveModal('TRADITION_EVENT');
         return;
@@ -1876,6 +1907,25 @@ export default function App() {
           </div>
 
           <button
+            onClick={() => {
+              soundEngine.click();
+              if (gameState.scene !== 'sekolah' && gameState.scene !== 'kompleks_warga') {
+                handleChangeScene('sekolah', undefined, () => {
+                  setActiveModal('TRADITIONAL_GAMES');
+                });
+                showToast('Arga langsung menuju Arena Kaulinan di Lapangan SD Negeri Sukamaju!');
+              } else {
+                setActiveModal('TRADITIONAL_GAMES');
+              }
+            }}
+            title="Langsung ke Arena Kaulinan (SD Sukamaju / Kompleks Warga) untuk bermain & menambah Poin"
+            className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg"
+          >
+            <Dices className="w-4 h-4" />
+            <span className="hidden md:inline">Kaulinan</span>
+          </button>
+
+          <button
             onClick={() => setActiveModal('MAP')}
             className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg"
           >
@@ -1978,6 +2028,66 @@ export default function App() {
                     <span>Kaki Arga masih pemulihan. Hati-hati menyeberang jalan!</span>
                   </div>
                 )}
+
+                {(() => {
+                  const cycleDay = ((gameState.day - 1) % 12) + 1;
+                  const todayTradition = TRADITIONS.find((t) => t.dayTrigger === cycleDay);
+                  if (!todayTradition) return null;
+                  const paidToday = gameState.paidTraditions.includes(
+                    `${todayTradition.id}_d${gameState.day}`
+                  );
+                  const isNow =
+                    gameState.minutesOfDay >= todayTradition.startMinutes &&
+                    gameState.minutesOfDay <= todayTradition.endMinutes;
+                  const isAtVenue = gameState.scene === todayTradition.scene;
+                  return (
+                    <div className="p-2 rounded-lg bg-amber-950/55 border border-amber-400/55 space-y-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300">
+                          Acara Warga Hari Ini
+                        </span>
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            paidToday
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : isNow
+                              ? 'bg-emerald-400 text-slate-950'
+                              : 'bg-slate-800 text-amber-200'
+                          }`}
+                        >
+                          {paidToday ? 'Sudah Ikut' : isNow ? 'Berlangsung' : 'Terjadwal'}
+                        </span>
+                      </div>
+                      <div className="font-bold text-amber-50 text-[11px] leading-snug">
+                        {todayTradition.title}
+                      </div>
+                      <div className="text-[10px] text-slate-300 leading-tight">
+                        🕒 {todayTradition.timeLabel}
+                        <br />
+                        📍 {todayTradition.locationLabel}
+                      </div>
+                      <button
+                        onClick={() => {
+                          soundEngine.click();
+                          if (!isAtVenue) {
+                            handleChangeScene(todayTradition.scene, undefined, () => {
+                              setActiveTradition(todayTradition);
+                              setActiveModal('TRADITION_EVENT');
+                            });
+                            showToast(`Arga langsung menuju ${todayTradition.locationLabel}!`);
+                          } else {
+                            setActiveTradition(todayTradition);
+                            setActiveModal('TRADITION_EVENT');
+                          }
+                        }}
+                        className="w-full py-1 px-2 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[10px] flex items-center justify-center gap-1"
+                      >
+                        <MapPin className="w-3 h-3" />
+                        <span>{isAtVenue ? 'Lihat Detail Acara' : 'Ke Tempat Acara'}</span>
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {/* Misi Harian (3 Tugas Kecil) */}
                 <div className="pt-1.5 border-t border-slate-800 space-y-1.5">
@@ -2113,14 +2223,19 @@ export default function App() {
                             return;
                           }
                           if (gameState.scene !== job.scene) {
-                            handleChangeScene(job.scene);
+                            handleChangeScene(job.scene, undefined, () => {
+                              setActiveSideJob(job);
+                              setActiveModal('SIDE_JOB');
+                            });
+                            showToast(`Arga langsung menuju ${job.locationLabel}...`);
+                          } else {
+                            setActiveSideJob(job);
+                            setActiveModal('SIDE_JOB');
                           }
-                          setActiveSideJob(job);
-                          setActiveModal('SIDE_JOB');
                         }}
                         className="mt-2 w-full py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs"
                       >
-                        Ikuti Kerja
+                        {gameState.scene === job.scene ? 'Ikuti Kerja' : `Ke ${job.locationLabel}`}
                       </button>
                     ) : (
                       <div className="mt-2 w-full py-1.5 rounded-lg bg-slate-800 text-slate-400 font-semibold text-center text-[11px]">
@@ -2254,8 +2369,22 @@ export default function App() {
       {activeModal === 'TRADITION_EVENT' && activeTradition && (
         <TraditionModal
           tradition={activeTradition}
+          currentScene={gameState.scene}
+          day={gameState.day}
+          minutesOfDay={gameState.minutesOfDay}
           money={gameState.money}
           alreadyPaid={gameState.paidTraditions.includes(`${activeTradition.id}_d${gameState.day}`)}
+          onGoToLocation={(targetScene) => {
+            const trad = activeTradition;
+            setActiveModal(null);
+            handleChangeScene(targetScene, undefined, () => {
+              if (trad) {
+                setActiveTradition(trad);
+                setActiveModal('TRADITION_EVENT');
+              }
+            });
+            showToast(`Arga langsung menuju ${trad.locationLabel}!`);
+          }}
           onPayUrunan={(trad) => {
             soundEngine.angklungSuccess();
             setGameState((prev) => ({
@@ -2367,8 +2496,7 @@ export default function App() {
             showToast(`Hutang dibayar sebesar ${formatRupiah(amount)}!`);
           }}
           onOpenTraditions={() => {
-            const nextTrad =
-              TRADITIONS.find((t) => !gameState.paidTraditions.includes(`${t.id}_d${gameState.day}`)) ?? TRADITIONS[0];
+            const nextTrad = resolveFeaturedTradition(gameState.day, gameState.paidTraditions);
             setActiveTradition(nextTrad);
             setActiveModal('TRADITION_EVENT');
           }}
@@ -2468,6 +2596,7 @@ export default function App() {
 
       {activeModal === 'CULTURAL_STAGE' && (
         <CulturalStageModal
+          minutesOfDay={gameState.minutesOfDay}
           onCompleteActivity={(mode, title, rewardMoney, rewardPoints) => {
             soundEngine.cash();
             setGameState((prev) => {
@@ -2501,6 +2630,53 @@ export default function App() {
             setActiveModal(null);
             showToast(
               `Luar biasa! ${title} di Bumi Ageung sukses (+${formatRupiah(rewardMoney)}, +${rewardPoints} Poin)!`
+            );
+          }}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+
+      {activeModal === 'TRADITIONAL_GAMES' && (
+        <KaulinanModal
+          minutesOfDay={gameState.minutesOfDay}
+          totalActivityPoints={computeEffectiveActivityPoints(gameState)}
+          onAwardPoints={(payload: KaulinanRewardPayload) => {
+            soundEngine.angklungSuccess();
+            setGameState((prev) => {
+              const { next } = advanceClockState(prev, 15);
+              return {
+                ...next,
+                money: next.money + payload.bonusMoney,
+                reputation: Math.min(5, Number((next.reputation + 0.03).toFixed(2))),
+                wargaSatisfaction: Math.min(100, next.wargaSatisfaction + 2),
+                activityPoints: computeEffectiveActivityPoints(prev) + payload.points,
+                totalActivitiesCount: (next.totalActivitiesCount ?? 0) + 1,
+                transactions:
+                  payload.bonusMoney > 0
+                    ? appendTransaction(next.transactions, {
+                        day: next.day,
+                        minutesOfDay: next.minutesOfDay,
+                        type: 'income',
+                        category: 'tradisi',
+                        title: `Kaulinan ${payload.gameTitle}`,
+                        detail: `${payload.resultLabel} · +${payload.points} Poin`,
+                        amount: payload.bonusMoney,
+                      })
+                    : next.transactions,
+                dailyMissions: advanceDailyMissionProgress(
+                  next.dailyMissions,
+                  next.day,
+                  'traditional_games',
+                  1,
+                  next.greetedNpcsToday.length,
+                  next.prayedToday.length
+                ),
+              };
+            });
+            showToast(
+              `${payload.gameTitle}: ${payload.resultLabel}! (+${payload.points} Poin Keaktifan${
+                payload.bonusMoney > 0 ? ` & ${formatRupiah(payload.bonusMoney)}` : ''
+              })`
             );
           }}
           onClose={() => setActiveModal(null)}

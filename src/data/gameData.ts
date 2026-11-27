@@ -471,6 +471,13 @@ const DAILY_MISSION_TEMPLATES: Record<
     rewardPoints: 25,
     rewardMoney: 20000,
   },
+  traditional_games: {
+    id: 'traditional_games',
+    label: 'Ikuti Permainan Tradisional Kampung',
+    target: 1,
+    rewardPoints: 20,
+    rewardMoney: 10000,
+  },
 };
 
 export const DAILY_MISSION_GRAND_BONUS = {
@@ -479,12 +486,13 @@ export const DAILY_MISSION_GRAND_BONUS = {
 };
 
 export function generateDailyMissions(day: number): DailyMissionsState {
-  // Day 1 & rotating days mix village social, warung trade, nature, and Sunda cultural stage
+  // Day 1 & rotating days mix village social, warung trade, nature, traditional games, and Sunda cultural stage
   const pools: DailyMissionTaskId[][] = [
-    ['greet_warga', 'sell_items', 'forage_herbal'],
+    ['greet_warga', 'sell_items', 'traditional_games'],
     ['greet_warga', 'sell_items', 'cultural_stage'],
     ['greet_warga', 'catch_fish', 'side_job'],
-    ['sell_items', 'cultural_stage', 'pray_jamaah'],
+    ['sell_items', 'traditional_games', 'pray_jamaah'],
+    ['greet_warga', 'forage_herbal', 'cultural_stage'],
   ];
   const chosenIds = pools[(Math.max(1, day) - 1) % pools.length];
   return {
@@ -1578,6 +1586,14 @@ export const SCENES: Record<SceneId, SceneDef> = {
         actionType: 'enter_scene',
         targetScene: 'bumi_ageung',
       },
+      {
+        id: 'kaulinan_kompleks',
+        label: 'Lapak Kaulinan Warga',
+        subtitle: 'Congklak, Egrang & Sondah (+Poin)',
+        x: 64,
+        y: 52,
+        actionType: 'traditional_games',
+      },
     ],
     neighbors: [
       { label: 'Warung Arga & Warung Asih', scene: 'kampung_warung', direction: 'Kanan' },
@@ -1823,6 +1839,14 @@ export const SCENES: Record<SceneId, SceneDef> = {
     ],
     defaultSpawn: { x: 48, y: 55 },
     hotspots: [
+      {
+        id: 'arena_kaulinan_sekolah',
+        label: 'Arena Kaulinan Tradisional',
+        subtitle: 'Main Congklak, Egrang & Sondah (+Poin)',
+        x: 52,
+        y: 48,
+        actionType: 'traditional_games',
+      },
       {
         id: 'halte_sekolah',
         label: 'Halte Sekolah ke Pasar',
@@ -2866,80 +2890,120 @@ export const TRADITIONS: TraditionDef[] = [
     dayTrigger: 2,
     title: 'Tradisi Botram Warga Kampung',
     description:
-      'Warga Sukamaju menggelar makan bersama di atas daun pisang panjang (Botram) di Bale Patemon untuk mempererat silaturahmi.',
+      'Warga Sukamaju menggelar makan siang bersama di atas daun pisang panjang (Botram) di Bale Patemon untuk mempererat silaturahmi.',
     urunanAmount: 35000,
     reputationGain: 0.2,
     hostNpc: 'Pak RT Dedi',
+    scene: 'bumi_ageung',
+    locationLabel: 'Bale Patemon & Bumi Ageung',
+    startMinutes: 11 * 60 + 30,
+    endMinutes: 14 * 60 + 30,
+    timeLabel: '11.30–14.30 WIB (Siang)',
   },
   {
     id: 'Tingkeban',
     dayTrigger: 4,
     title: 'Upacara Adat Tingkeban (7 Bulanan)',
     description:
-      'Keluarga Kang Asep mengadakan syukuran tujuh bulanan kehamilan dengan doa bersama dan rujak tujuh rupa.',
+      'Keluarga Kang Asep mengadakan syukuran tujuh bulanan kehamilan dengan doa bersama dan rujak tujuh rupa di Kompleks Warga.',
     urunanAmount: 30000,
     reputationGain: 0.18,
     hostNpc: 'Ceu Imas',
+    scene: 'kompleks_warga',
+    locationLabel: 'Kompleks Rumah Warga',
+    startMinutes: 9 * 60,
+    endMinutes: 12 * 60,
+    timeLabel: '09.00–12.00 WIB (Pagi)',
   },
   {
     id: 'Wayang Golek',
     dayTrigger: 5,
-    title: 'Pagelaran Wayang Golek Semalam Suntuk',
+    title: 'Pagelaran Wayang Golek Malam Hari',
     description:
-      'Warga berkumpul di halaman Bumi Ageung menyaksikan dalang memainkan lakon Si Cepot & Semar penuh petuah Sunda.',
+      'Warga berkumpul di halaman Bumi Ageung pada malam hari menyaksikan dalang memainkan lakon Si Cepot & Semar di bawah lampu blencong.',
     urunanAmount: 40000,
     reputationGain: 0.24,
     hostNpc: 'Mang Ujang',
+    scene: 'bumi_ageung',
+    locationLabel: 'Halaman Bumi Ageung',
+    startMinutes: 19 * 60,
+    endMinutes: 23 * 60 + 30,
+    timeLabel: '19.00–23.30 WIB (Malam Hari)',
   },
   {
     id: 'Sawer',
     dayTrigger: 6,
     title: 'Acara Sawer Pengantin Kampung',
     description:
-      'Upacara saweran tradisi Sunda dengan taburan beras kuning, permen, dan uang logam penuh nasihat bijak.',
+      'Upacara saweran tradisi Sunda pagi hari dengan taburan beras kuning, permen, dan uang logam penuh nasihat bijak.',
     urunanAmount: 25000,
     reputationGain: 0.16,
     hostNpc: 'Abah Karta',
+    scene: 'kompleks_warga',
+    locationLabel: 'Kompleks Rumah Warga',
+    startMinutes: 9 * 60 + 30,
+    endMinutes: 12 * 60 + 30,
+    timeLabel: '09.30–12.30 WIB (Pagi)',
   },
   {
     id: 'Ngalaksa',
     dayTrigger: 8,
     title: 'Festival Adat Ngalaksa',
     description:
-      'Membuat makanan laksa tradisional dari tepung beras di Saung Lisung sebagai wujud syukur atas berkah panen.',
+      'Membuat makanan laksa tradisional dari tepung beras di Saung Lisung pada pagi hari sebagai wujud syukur atas berkah panen.',
     urunanAmount: 35000,
     reputationGain: 0.22,
     hostNpc: 'Abah Karta',
+    scene: 'sawah_lisung',
+    locationLabel: 'Sawah & Saung Lisung',
+    startMinutes: 8 * 60,
+    endMinutes: 11 * 60 + 30,
+    timeLabel: '08.00–11.30 WIB (Pagi)',
   },
   {
     id: 'Ngaruwat Bumi',
     dayTrigger: 10,
     title: 'Upacara Ngaruwat Bumi',
     description:
-      'Doa tolak bala dan rasa syukur menjaga kelestarian tanah, sawah, serta Hutan Tutupan di Bumi Ageung.',
+      'Doa tolak bala dan rasa syukur menjaga kelestarian tanah, sawah, serta Hutan Tutupan di Bumi Ageung menjelang malam.',
     urunanAmount: 45000,
     reputationGain: 0.25,
     hostNpc: 'Aki Jaya',
+    scene: 'bumi_ageung',
+    locationLabel: 'Halaman Bumi Ageung',
+    startMinutes: 16 * 60,
+    endMinutes: 19 * 60 + 30,
+    timeLabel: '16.00–19.30 WIB (Sore–Malam)',
   },
   {
     id: 'Angklung Saung',
     dayTrigger: 11,
     title: 'Kirab & Konser Angklung Priangan',
     description:
-      'Anak-anak SD Sukamaju dan pemuda kampung memainkan harmoni angklung bambu mengiringi lagu Manuk Dadali.',
+      'Anak-anak SD Sukamaju dan pemuda kampung memainkan harmoni angklung bambu pada sore hari mengiringi lagu Manuk Dadali.',
     urunanAmount: 35000,
     reputationGain: 0.22,
     hostNpc: 'Teh Nenden',
+    scene: 'sekolah',
+    locationLabel: 'Lapangan SD Negeri Sukamaju',
+    startMinutes: 15 * 60 + 30,
+    endMinutes: 18 * 60,
+    timeLabel: '15.30–18.00 WIB (Sore)',
   },
   {
     id: 'Seren Taun',
     dayTrigger: 12,
     title: 'Perayaan Agung Seren Taun',
     description:
-      'Pesta panen raya tahunan masyarakat Sunda dengan arak-arakan padi, angklung buncis, dan kenduri akbar.',
+      'Pesta panen raya tahunan masyarakat Sunda dengan arak-arakan padi, angklung buncis, dan kenduri akbar di Saung Lisung.',
     urunanAmount: 50000,
     reputationGain: 0.3,
     hostNpc: 'Pak RT Dedi',
+    scene: 'sawah_lisung',
+    locationLabel: 'Sawah & Saung Lisung',
+    startMinutes: 8 * 60,
+    endMinutes: 13 * 60,
+    timeLabel: '08.00–13.00 WIB (Pagi–Siang)',
   },
 ];
 

@@ -4,6 +4,7 @@ import { soundEngine } from '../utils/audio';
 import { useUiGamepadAction } from '../hooks/useGamepad';
 
 interface CulturalStageModalProps {
+  minutesOfDay: number;
   onCompleteActivity: (
     mode: 'angklung' | 'wayang',
     title: string,
@@ -62,10 +63,16 @@ const WAYANG_SCENES = [
 ];
 
 export const CulturalStageModal: React.FC<CulturalStageModalProps> = ({
+  minutesOfDay,
   onCompleteActivity,
   onClose,
 }) => {
-  const [tab, setTab] = useState<'angklung' | 'wayang'>('angklung');
+  const isWayangNightWindow = minutesOfDay >= 18 * 60 + 30;
+  const isAngklungDayWindow = minutesOfDay >= 7 * 60 && minutesOfDay < 18 * 60 + 30;
+
+  const [tab, setTab] = useState<'angklung' | 'wayang'>(() =>
+    isWayangNightWindow ? 'wayang' : 'angklung'
+  );
   const [shakingPipe, setShakingPipe] = useState<number | null>(null);
   const [presetIdx, setPresetIdx] = useState(0);
   const [melodyStep, setMelodyStep] = useState(0);
@@ -86,7 +93,7 @@ export const CulturalStageModal: React.FC<CulturalStageModalProps> = ({
       setShakingPipe((prev) => (prev === idx ? null : prev));
     }, 360);
 
-    if (angklungDone) return;
+    if (angklungDone || !isAngklungDayWindow) return;
     if (idx === expectedNote) {
       const nextStep = melodyStep + 1;
       if (nextStep >= activePreset.notes.length) {
@@ -181,9 +188,14 @@ export const CulturalStageModal: React.FC<CulturalStageModalProps> = ({
         <div className="flex-1 overflow-y-auto pr-1 space-y-3 mb-4">
           {tab === 'angklung' && (
             <>
+              {!isAngklungDayWindow && (
+                <div className="bg-amber-950/60 border border-amber-400/60 rounded-xl px-3.5 py-2.5 text-xs text-amber-100">
+                  <strong>Jadwal Pentas Angklung (07.00–18.30 WIB):</strong> Saat ini sudah malam hari — bambu angklung tetap bisa dicoba untuk latihan, sedangkan pentas berhadiah beralih ke <strong>Wayang Golek Malam Hari</strong>!
+                </div>
+              )}
               <div className="bg-slate-950/90 border border-amber-400/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <div className="text-xs font-bold text-amber-200">{activePreset.title}</div>
+                  <div className="text-xs font-bold text-amber-200">{activePreset.title} · Pagi–Sore (07.00–18.30 WIB)</div>
                   <div className="text-[11px] text-slate-400">
                     Ketuk bambu Angklung atau tekan angka <strong>1–5</strong> / <strong>[A]</strong> mengikuti not menyala!
                   </div>
@@ -391,10 +403,19 @@ export const CulturalStageModal: React.FC<CulturalStageModalProps> = ({
               </div>
 
               {/* Dalang Dialogue & Wisdom Quiz */}
-              {!wayangDone ? (
+              {!isWayangNightWindow ? (
+                <div className="bg-slate-950 border border-amber-400/50 rounded-xl p-4 space-y-2 text-xs">
+                  <div className="font-bold text-amber-300">
+                    Jadwal Pagelaran Wayang Golek: Malam Hari (18.30–23.59 WIB)
+                  </div>
+                  <p className="text-slate-300 leading-relaxed">
+                    Saat ini masih siang/sore hari. Pagelaran Wayang Golek bersama Ki Dalang, Si Cepot &amp; Semar digelar pada <strong>malam hari</strong> di Bumi Ageung dengan sorot lampu blencong. Anda tetap bisa mengetuk wayang atau menabuh Goong di atas untuk latihan, lalu datang kembali malam nanti!
+                  </p>
+                </div>
+              ) : !wayangDone ? (
                 <div className="bg-slate-950 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5">
                   <div className="text-xs font-bold text-amber-300">
-                    Babak {wayangStep + 1}/{WAYANG_SCENES.length} · {activeWayang.speaker}
+                    Babak {wayangStep + 1}/{WAYANG_SCENES.length} · {activeWayang.speaker} (Pentas Malam)
                   </div>
                   <p className="text-xs italic text-amber-100">{activeWayang.sundaLine}</p>
                   <p className="text-[11px] text-emerald-300">{activeWayang.indoLine}</p>
